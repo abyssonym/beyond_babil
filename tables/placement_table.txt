@@ -1,0 +1,5 @@
+# underground bit in npc_index?
+npc_index,1
+x,bit:x10 x11 x12 x13 x14 u15 u16 walks
+y,bit:y20 y21 y22 y23 y24 u25 u26 intangible
+misc,bit:facing30 facing31 palette32 palette33 turns marches speed36 speed37

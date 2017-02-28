@@ -1,0 +1,10 @@
+x,1
+y,1
+# warp: new_map, dest_x_facing, dest_y
+# treasure: 0xFE, trapped/item, index
+#       0x40 trapped
+#       0x80 item
+# event: 0xFF, index, zero
+misc1,1
+misc2,1
+misc3,1

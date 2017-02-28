@@ -1,0 +1,13 @@
+properties_battlebackground,bit:bbg1 bbg2 bbg3 bbg4 warpable exitable u06 magnetic
+grid_index,1
+tileset_index,1
+npc_placement_index,1
+border_tile,1
+map_palette,1
+npc_palettes,1
+music,1
+background,1
+bg_properties,bit:bg_translucent bg_scroll_vertical bg_scroll_horizontal u93 bg_move_dir_1 bg_move_dir_2 bg_move_speed_1 bg_move_speed_2
+underground,1
+name_index,1
+treasure_index,1

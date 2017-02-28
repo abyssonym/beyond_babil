@@ -1,0 +1,15 @@
+level,bit:l00 l01 l02 l03 l04 l05 l06 boss
+hp,2
+attack,1
+defense,1
+magic_defense,1
+speed_index,1
+drop_index,1
+attack_sequence_group,1
+misc,bit:u90 u91 has_reaction has_race has_spell_power has_weaknesses has_resistances has_attack_element
+#attack_elements,3
+#resistances,3
+#weaknesses,1
+#has_spell_power,1
+#has_race,1
+#has_reaction,1

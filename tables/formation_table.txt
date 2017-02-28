@@ -1,0 +1,6 @@
+misc1,bit:u00 u01 u02 back_attack boss_death egg1 egg2 egg3
+monster_types,3,list
+monster_qty,1
+arrangement,1
+misc2,bit:no_flee no_gameover battle_music1 battle_music2 character_battle auto_battle floating transparent
+unk1,1

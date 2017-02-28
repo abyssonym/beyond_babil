@@ -1,0 +1,2 @@
+misc1,bit:layer_1 layer_2 bridge_layer save_point closed_door u5 u6 u7
+misc2,bit:damage_floor u9 walk_behind bottom_half warp talk_over encounters triggerable

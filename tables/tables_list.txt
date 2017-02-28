@@ -1,0 +1,20 @@
+# objname tablefile address count grouped
+FormationObject     formation_table.txt         70000   512
+MonsterNameObject   monster_name_table.txt      71800   224
+MonsterDropObject   monster_drop_table.txt      71f00   64
+MonsterGilObject    monster_gil_table.txt       72000   224
+MonsterXPObject     monster_xp_table.txt        721c0   224
+MonsterObject       monster_table.txt           726a0   224     point1  68000 2
+EncounterObject     encounter_table.txt         74542   468
+#OverworldPackObject pack_table.txt              74796   16
+PackObject          pack_table.txt              74816   80
+ItemNameObject      item_name_table.txt         78000   256
+CommandNameObject   command_name_table.txt      7a7c6   26
+EventObject         event_table.txt             90000   256
+PlacementObject     placement_table.txt         98000   384     pointdelimit 98300 2 0
+# 16 tilesets 128 tiles each
+TileObject          tile_table.txt              a0e00   2048
+TriggerObject       trigger_table.txt           a8000   384     pointed a8300 2
+MapObject           map_table.txt               a9c84   384
+MapGridObject       map_grid_table.txt          b8000   384
+# every map grid is 32x32, compressed with simple repeating algorithm... if high bit of tile is set, that tile is repeated an additional N times
