@@ -384,6 +384,8 @@ class MapObject(TableObject):
         s = self.name + "\n"
         for i, t in enumerate(self.triggers):
             s += "{0:0>2}. ".format(i) + t.description + "\n"
+        for i, (x, y) in enumerate(self.warps):
+            s += "WARP {0:0>2}: {1:0>2} {2:0>2}\n".format(i, x, y)
         return s.strip()
 
     @property
@@ -394,7 +396,10 @@ class MapObject(TableObject):
 
     @property
     def map(self):
-        return MapGridObject.get(self.grid_index).map
+        if self.index < 0x100:
+            return MapGridObject.get(self.grid_index).map
+        else:
+            return MapGrid2Object.get(self.grid_index).map
 
     def pretty_tile_map(self, attr=None, validator=None):
         if validator is None and attr is not None:
@@ -430,6 +435,17 @@ class MapObject(TableObject):
         return "%s\n%s" % (self.name, s.strip())
 
     @property
+    def warps(self):
+        warps = []
+        for y in xrange(32):
+            for x in xrange(32):
+                tile = self.map[y][x]
+                tile = TileObject.get((128*self.tileset_index)+tile)
+                if tile.get_bit("warp"):
+                    warps.append((x, y))
+        return warps
+
+    @property
     def triggers(self):
         return TriggerObject.getgroup(self.index)
 
@@ -451,20 +467,25 @@ class MapObject(TableObject):
 
 
 class MapGridObject(TableObject):
+    BASE_POINTER = 0xb8000
+
     @property
     def map(self):
         if hasattr(self, "_map"):
             return self._map
 
+        self._compressed = ""
         f = open(get_outfile(), "r+b")
-        f.seek(self.map_pointer | 0xb8000)
+        f.seek(self.map_pointer + self.BASE_POINTER)
         data = []
         while len(data) < 1024:
             tile = ord(f.read(1))
+            self._compressed += chr(tile)
             if tile & 0x80:
                 tile = tile & 0x7F
                 data.append(tile)
                 additional = ord(f.read(1))
+                self._compressed += chr(tile)
                 data.extend([tile] * additional)
             else:
                 data.append(tile)
@@ -475,12 +496,25 @@ class MapGridObject(TableObject):
         return self.map
 
     @property
+    def compressed(self):
+        self.map
+        return self._compressed
+
+    @property
+    def size(self):
+        return len(self.compressed)
+
+    @property
     def pretty_map(self):
         s = ""
         for row in self.map:
             s += " ".join(["{0:0>2}".format("%x" % v) for v in row])
             s += "\n"
         return s.strip()
+
+
+class MapGrid2Object(MapGridObject):
+    BASE_POINTER = 0xc0000
 
 
 if __name__ == "__main__":
@@ -514,6 +548,7 @@ if __name__ == "__main__":
             print e.pretty_script
             print
         '''
+        import pdb; pdb.set_trace()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
