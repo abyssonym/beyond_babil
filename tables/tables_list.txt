@@ -11,7 +11,9 @@ PackObject          pack_table.txt              74816   80
 ItemNameObject      item_name_table.txt         78000   256
 CommandNameObject   command_name_table.txt      7a7c6   26
 EventObject         event_table.txt             90000   256
+EventCallObject     event_call_table.txt        97260   256
 PlacementObject     placement_table.txt         98000   384     pointdelimit 98300 2 0
+SpeechObject        event_call_table.txt        99800   512
 # 16 tilesets 128 tiles each
 TileObject          tile_table.txt              a0e00   2048
 TriggerObject       trigger_table.txt           a8000   384     pointed a8300 2

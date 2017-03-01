@@ -214,12 +214,14 @@ class CommandNameObject(NameObject): pass
 
 
 class EventObject(TableObject):
+    BASE_POINTER = 0x90200
+
     @property
     def instructions(self):
         if hasattr(self, "_instructions"):
             return self._instructions
         f = open(get_outfile(), "r+b")
-        f.seek(self.event_pointer | 0x90200)
+        f.seek(self.event_pointer + self.BASE_POINTER)
         self._instructions = []
         while True:
             cmd = ord(f.read(1))
@@ -256,28 +258,80 @@ class EventObject(TableObject):
             size += 1 + len(parameters)
         return size
 
-class PlacementUnit:
-    def __init__(self, npc_index, x, y, misc):
-        self.npc_index = npc_index
-        self._x = x
-        self._y = y
-        self.misc = misc
+    @property
+    def commands(self):
+        return [cmd for (cmd, parameters) in self.instructions]
+
+    @property
+    def messager(self):
+        return bool(set(self.commands) &
+                    set([0xF1, 0xF0, 0xEF, 0xEE, 0xF8, 0xF6]))
+
+    @property
+    def battle(self):
+        return 0xEC in self.commands
+
+    @property
+    def flagger(self):
+        return bool(set(self.commands) & set([0xF2, 0xF3]))
+
+
+class EventCallObject(TableObject):
+    BASE_POINTER = 0x97460
+
+    @property
+    def size(self):
+        try:
+            return (self.get(self.index+1).event_call_pointer
+                - self.event_call_pointer)
+        except KeyError:
+            return 0
+
+    @property
+    def cases(self):
+        if hasattr(self, "_cases"):
+            return self._cases
+        self._cases = []
+
+        f = open(get_outfile(), "r+b")
+        f.seek(self.event_call_pointer + self.BASE_POINTER)
+        conditions = []
+        while True:
+            if f.tell() >= self.BASE_POINTER + self.event_call_pointer + self.size:
+                break
+            peek = ord(f.read(1))
+            if peek == 0xFF:
+                call = ord(f.read(1))
+                self._cases.append((conditions, call))
+                conditions = []
+            elif peek == 0xFE:
+                conditions.append((ord(f.read(1)), True))
+            else:
+                conditions.append((peek, False))
+        f.close()
+        return self.cases
+
+    @property
+    def events(self):
+        events = []
+        for conditions, call in self.cases:
+            events.append(EventObject.get(call))
+        return events
+
+
+class PlacementObject(TableObject):
+    def neutralize(self):
+        self.set_bit("intangible", True)
+        self.set_bit("walks", False)
+        self.npc_index = 0
 
     @property
     def x(self):
-        return self._x & 0x1F
+        return self.xmisc & 0x1F
 
     @property
     def y(self):
-        return self._y & 0x1F
-
-    @property
-    def walks(self):
-        return bool(self.x & 0x80)
-
-    @property
-    def intangible(self):
-        return bool(self.y & 0x80)
+        return self.ymisc & 0x1F
 
     @property
     def facing(self):
@@ -299,9 +353,21 @@ class PlacementUnit:
     def speed(self):
         return self.misc >> 6
 
+    @property
+    def speech(self):
+        return SpeechObject.get(self.npc_index)
 
-class PlacementObject(TableObject):
-    pass
+    @property
+    def events(self):
+        return self.speech.events
+
+    @property
+    def messager(self):
+        return any([e.messager for e in self.events])
+
+
+class SpeechObject(EventCallObject):
+    BASE_POINTER = 0x99c00
 
 
 class TileObject(TableObject):
@@ -314,11 +380,15 @@ class TriggerObject(TableObject):
     # x, y are not modifiable without changing the map data
     # you just end up on the moon
 
+    def neutralize(self):
+        if self.is_event:
+            self.misc2 = 2
+
     @property
     def description(self):
         s = "{0:0>2} {1:0>2}".format(self.x, self.y)
         if self.is_event:
-            s = "%s EVENT: $%x" % (s, self.event)
+            s = "%s EVENT: $%x" % (s, self.event_call_index)
         elif self.is_chest:
             s = "%s CHEST:" % s
             if not self.misc2 & 0xC0:
@@ -359,8 +429,16 @@ class TriggerObject(TableObject):
         return self.misc3
 
     @property
-    def event(self):
+    def event_call_index(self):
         return self.misc2
+
+    @property
+    def event_call(self):
+        return EventCallObject.get(self.event_call_index)
+
+    @property
+    def events(self):
+        return self.event_call.events
 
     @property
     def new_map(self):
@@ -392,14 +470,18 @@ class MapObject(TableObject):
     def name(self):
         #if self.name_index >= len(LOCATION_NAMES):
         #    return "?????"
-        return LOCATION_NAMES[self.name_index & 0x7F]
+        return "%x %s" % (self.index, LOCATION_NAMES[self.name_index & 0x7F])
+
+    @property
+    def mapgrid(self):
+        if self.index < 0x100:
+            return MapGridObject.get(self.grid_index)
+        else:
+            return MapGrid2Object.get(self.grid_index)
 
     @property
     def map(self):
-        if self.index < 0x100:
-            return MapGridObject.get(self.grid_index).map
-        else:
-            return MapGrid2Object.get(self.grid_index).map
+        return self.mapgrid.map
 
     def pretty_tile_map(self, attr=None, validator=None):
         if validator is None and attr is not None:
@@ -464,6 +546,15 @@ class MapObject(TableObject):
     @property
     def npc_placements(self):
         return PlacementObject.getgroup(self.npc_placement_index)
+
+    @property
+    def exit_summary(self):
+        summary = set([])
+        for e in self.exits:
+            summary.add((e.x, e.y))
+        for x, y in self.warps:
+            summary.add((x, y))
+        return summary
 
 
 class MapGridObject(TableObject):
@@ -547,8 +638,24 @@ if __name__ == "__main__":
         for e in EventObject.every:
             print e.pretty_script
             print
+        flags = set([])
+        for p in SpeechObject.every + EventCallObject.every:
+            for conditions, call in p.cases:
+                for flag, truth in conditions:
+                    flags.add(flag)
+        print [f for f in xrange(0x100) if f not in flags]
+        crash_game = EventObject.get(0xFE)
+        for t in TriggerObject.every:
+            assert crash_game not in t.events
+        for t in TriggerObject.every + PlacementObject.every:
+            for e in t.events:
+                if e.flagger:
+                    t.neutralize()
+                    break
+            else:
+                if crash_game in t.events and isinstance(t, PlacementObject):
+                    t.set_bit("intangible", True)
         '''
-        import pdb; pdb.set_trace()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
