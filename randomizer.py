@@ -7,6 +7,7 @@ from randomtools.interface import (
     clean_and_write, finish_interface)
 from collections import defaultdict
 from os import path
+from time import time
 import string
 
 
@@ -52,6 +53,230 @@ def get_location_names(outfile):
     print hex(f.tell())
     f.close()
     return get_location_names(None)
+
+
+class ReprSortMixin:
+    def __hash__(self):
+        return hash(self.__repr__())
+
+    def __lt__(self, other):
+        return self.__repr__() < other.__repr__()
+
+    def __eq__(self, other):
+        return self.__repr__() == other.__repr__()
+
+
+class ClusterExit(ReprSortMixin):
+    def __init__(self, cluster, x, y):
+        self.cluster = cluster
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return "%x: %s %s" % (self.cluster.mapid, self.x, self.y)
+
+    def is_adjacent(self, other):
+        return (self.x-other.x) * (self.y-other.y) == 0 and (
+            abs(self.x-other.x) == 1 or abs(self.y-other.y) == 1)
+
+
+class Cluster(ReprSortMixin):
+    def __init__(self, mapid, exits):
+        self.mapid = mapid
+        self.exits = []
+        for (x, y) in sorted(exits):
+            self.exits.append(ClusterExit(self, x, y))
+
+    def __repr__(self):
+        return "{0:0>3} -- ".format("%x" % self.mapid) + ", ".join(
+            [str(x) for x in sorted(self.exits)])
+
+    @staticmethod
+    def from_string(s):
+        mapid, exits = s.split(":")
+        mapid = int(mapid, 0x10)
+        exits = [tuple(map(int, x.split('.'))) for x in exits.split()]
+        return Cluster(mapid, exits)
+
+    @property
+    def exit_adjacencies(self):
+        if hasattr(self, "_exit_adjacencies"):
+            return self._exit_adjacencies
+        adjacencies = [set([cx]) for cx in self.exits]
+        while True:
+            repeat = False
+            for i, a in enumerate(adjacencies):
+                for cx in self.exits:
+                    if cx in a:
+                        continue
+                    for acx in sorted(a):
+                        if cx.is_adjacent(acx):
+                            adjacencies[i].add(cx)
+                            repeat = True
+            if not repeat:
+                break
+        adjacencies = set([tuple(sorted(a)) for a in adjacencies])
+
+        self._exit_adjacencies = sorted(adjacencies)
+        return self.exit_adjacencies
+
+    @property
+    def num_outs(self):
+        return len(self.exit_adjacencies)
+
+
+class ClusterGroup:
+    def __init__(self, clusters):
+        self.clusters = sorted(set(clusters))
+
+    def connect(self):
+        self.connections = []
+        edge_candidates = [c for c in self.clusters if c.num_outs >= 2]
+        if len(edge_candidates) < 2:
+            raise Exception("Not enough doors for two entrances to group")
+
+        start, finish = random.sample(edge_candidates, 2)
+        available_outs = dict([(c, c.num_outs) for c in self.clusters])
+        available_outs[start] -= 1
+        available_outs[finish] -= 1
+        available_clusters = [start]
+        remaining_clusters = [c for c in self.clusters
+                              if c not in [start, finish]]
+        random.shuffle(remaining_clusters)
+        remaining_clusters.append(finish)
+
+        while remaining_clusters:
+            assert not set(available_clusters) & set(remaining_clusters)
+            if not available_clusters:
+                break
+            max_index = len(available_clusters)-1
+            a = random.randint(random.randint(0, max_index), max_index)
+            a = available_clusters[a]
+            candidates = None
+            if len(available_clusters) == 1 and available_outs[a] == 1:
+                candidates = [r for r in remaining_clusters
+                              if available_outs[r] >= 2]
+                if not candidates:
+                    raise Exception("Unable to connect all clusters.")
+            else:
+                candidates = remaining_clusters
+            max_index = len(candidates)-1
+            r = random.randint(0, random.randint(0, max_index))
+            r = candidates[r]
+            self.connections.append(tuple(sorted((a, r))))
+            for c in (a, r):
+                available_outs[c] -= 1
+                assert available_outs[c] >= 0
+            available_clusters.append(r)
+            remaining_clusters.remove(r)
+            available_clusters = [a for a in available_clusters
+                                  if available_outs[a] > 0]
+
+        if remaining_clusters:
+            raise Exception("Unable to connect all clusters.")
+        self.start = start
+        self.finish = finish
+        self.available_outs = available_outs
+
+    def rank_clusters(self):
+        assert self.connections
+        done = set([])
+        for c in self.clusters:
+            if c.mapid == self.start.mapid:
+                c.rank = 0
+                done.add(c)
+        while len(done) < len(self.clusters):
+            connections = list(self.connections)
+            random.shuffle(connections)
+            for a, b in self.connections:
+                if ((a in done and b not in done) or
+                        (b in done and a not in done)):
+                    c = a if a not in done else b
+                    rank = max([d.rank for d in done]) + 1
+                    for e in self.clusters:
+                        if e.mapid == c.mapid:
+                            e.rank = rank
+                            done.add(e)
+                    break
+
+    def fill_out(self):
+        assert self.connections
+        assert hasattr(self, "available_outs")
+        assert [hasattr(c, "rank") for c in self.clusters]
+        while True:
+            remaining = sorted([r for r in self.clusters
+                                if self.available_outs[r] > 0],
+                               key=lambda c: (c.rank, c))
+            if len(remaining) == 0:
+                break
+            elif len(remaining) == 1:
+                r = remaining[0]
+                if self.available_outs[r] == 1:
+                    # dangling exit
+                    self.connections.append((r, None))
+                    self.available_outs[r] = 0
+                    continue
+                else:
+                    pivot, partner = r, r
+            else:
+                by_available_outs = sorted(remaining,
+                    key=lambda c: (self.available_outs[c], c))
+                max_index = len(by_available_outs)-1
+                pivot = by_available_outs[
+                    random.randint(random.randint(0, max_index), max_index)]
+                index = max(0, remaining.index(pivot)-1)
+                remaining.remove(pivot)
+                max_index = len(remaining)-1
+                partner = random.randint(0, max_index)
+                if partner <= index:
+                    partner = random.randint(partner, index)
+                else:
+                    partner = random.randint(index, partner)
+                partner = remaining[partner]
+            self.connections.append(tuple(sorted((pivot, partner))))
+            for c in [pivot, partner]:
+                self.available_outs[c] -= 1
+                assert self.available_outs[c] >= 0
+
+    def full_execute(self):
+        for _ in xrange(10):
+            try:
+                self.connect()
+                break
+            except:
+                pass
+        else:
+            raise Exception("Excessive attempts to connect clusters.")
+        self.rank_clusters()
+        self.fill_out()
+
+
+def try_it_out():
+    clusterpath = path.join(tblpath, "clusters.txt")
+    f = open(clusterpath)
+    clusters = [Cluster.from_string(line) for line in f.readlines()
+                if line.strip()]
+    f.close()
+    random.seed(int(time()))
+    while True:
+        try:
+            cg = ClusterGroup(random.sample(clusters, 20))
+            cg.full_execute()
+            break
+        except:
+            continue
+    print cg.start.rank, cg.start
+    print
+    for a, b in cg.connections:
+        print a.rank, a
+        if b is not None:
+            print b.rank, b
+        else:
+            print b
+        print
+    print cg.finish.rank, cg.finish
+    print
+    import pdb; pdb.set_trace()
 
 
 class FormationObject(TableObject):
@@ -656,6 +881,8 @@ if __name__ == "__main__":
                 if crash_game in t.events and isinstance(t, PlacementObject):
                     t.set_bit("intangible", True)
         '''
+        try_it_out()
+        import pdb; pdb.set_trace()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
