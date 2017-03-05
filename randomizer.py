@@ -8,6 +8,7 @@ from randomtools.interface import (
 from collections import defaultdict
 from os import path
 from time import time
+from collections import Counter
 import string
 
 
@@ -16,11 +17,11 @@ ALL_OBJECTS = None
 LOCATION_NAMES = []
 
 
-def get_location_names(outfile):
+def get_location_names():
     if LOCATION_NAMES:
         return LOCATION_NAMES
 
-    f = open(outfile, "r+b")
+    f = open(get_outfile(), "r+b")
     f.seek(0xa9620)
     for _ in xrange(128):
         s = ""
@@ -52,7 +53,24 @@ def get_location_names(outfile):
         LOCATION_NAMES.append(s)
     print hex(f.tell())
     f.close()
-    return get_location_names(None)
+    return get_location_names()
+
+
+def write_location_names():
+    global LOCATION_NAMES
+    f = open(get_outfile(), "r+b")
+    f.seek(0xa9620)
+    for number in xrange(101):
+        s = ""
+        for c in str(number):
+            s += chr(int(c) + 0x80)
+        s += chr(0)
+        f.write(s)
+    f.close()
+    LOCATION_NAMES = []
+
+
+class CaveException(Exception): pass
 
 
 class ReprSortMixin:
@@ -79,6 +97,43 @@ class ClusterExit(ReprSortMixin):
         return (self.x-other.x) * (self.y-other.y) == 0 and (
             abs(self.x-other.x) == 1 or abs(self.y-other.y) == 1)
 
+    @property
+    def rank(self):
+        return self.cluster.rank
+
+    @property
+    def mapid(self):
+        return self.cluster.mapid
+
+    @property
+    def cluster_group(self):
+        return self.cluster.cluster_group
+
+    def create_exit_trigger(self, mapid, x, y):
+        assert mapid < 0xFE
+        assert x < 32
+        assert y < 32
+        selfmap = MapObject.reverse_grid_index_canonical(self.mapid).index
+        othermap = MapObject.reverse_grid_index_canonical(mapid).index
+        index = ((1 << 16) | (selfmap << 8)
+                 | len(TriggerObject.getgroup(selfmap)))
+        for t in TriggerObject.getgroup(selfmap):
+            if (t.x, t.y) == (self.x, self.y):
+                # XXX: what to do about non-exit triggers?
+                if t.is_exit:
+                    # dangling exit
+                    return
+        t = TriggerObject(index=index)
+        t.groupindex = selfmap
+        t.x = self.x
+        t.y = self.y
+        t.misc1 = othermap
+        t.misc2 = x | 0x80
+        t.misc3 = y
+        assert t.new_map == othermap
+        assert t.dest_x == x
+        assert t.dest_y == y
+
 
 class Cluster(ReprSortMixin):
     def __init__(self, mapid, exits):
@@ -99,9 +154,9 @@ class Cluster(ReprSortMixin):
         return Cluster(mapid, exits)
 
     @property
-    def exit_adjacencies(self):
-        if hasattr(self, "_exit_adjacencies"):
-            return self._exit_adjacencies
+    def adjacencies(self):
+        if hasattr(self, "_adjacencies"):
+            return self._adjacencies
         adjacencies = [set([cx]) for cx in self.exits]
         while True:
             repeat = False
@@ -117,25 +172,47 @@ class Cluster(ReprSortMixin):
                 break
         adjacencies = set([tuple(sorted(a)) for a in adjacencies])
 
-        self._exit_adjacencies = sorted(adjacencies)
-        return self.exit_adjacencies
+        self._adjacencies = sorted(adjacencies)
+        return self.adjacencies
 
     @property
     def num_outs(self):
-        return len(self.exit_adjacencies)
+        return len(self.adjacencies)
 
 
 class ClusterGroup:
     def __init__(self, clusters):
         self.clusters = sorted(set(clusters))
 
+    @property
+    def connected_exits(self):
+        connected = set([])
+        for (aa, bb) in self.connections:
+            for x in list(aa) + list(bb):
+                assert isinstance(x, ClusterExit)
+                connected.add(x)
+        return connected
+
+    @property
+    def exits(self):
+        return set([x for c in self.clusters for x in c.exits])
+
+    @property
+    def unconnected_exits(self):
+        return self.exits - self.connected_exits
+
     def connect(self):
         self.connections = []
         edge_candidates = [c for c in self.clusters if c.num_outs >= 2]
-        if len(edge_candidates) < 2:
-            raise Exception("Not enough doors for two entrances to group")
+        edge_mapids = set([c.mapid for c in edge_candidates])
+        if len(edge_mapids) < 2:
+            raise CaveException("Not enough doors for two entrances to group")
 
-        start, finish = random.sample(edge_candidates, 2)
+        while True:
+            start, finish = random.sample(edge_candidates, 2)
+            if start.mapid != finish.mapid:
+                break
+
         available_outs = dict([(c, c.num_outs) for c in self.clusters])
         available_outs[start] -= 1
         available_outs[finish] -= 1
@@ -157,7 +234,7 @@ class ClusterGroup:
                 candidates = [r for r in remaining_clusters
                               if available_outs[r] >= 2]
                 if not candidates:
-                    raise Exception("Unable to connect all clusters.")
+                    raise CaveException("Unable to connect all clusters.")
             else:
                 candidates = remaining_clusters
             max_index = len(candidates)-1
@@ -173,7 +250,7 @@ class ClusterGroup:
                                   if available_outs[a] > 0]
 
         if remaining_clusters:
-            raise Exception("Unable to connect all clusters.")
+            raise CaveException("Unable to connect all clusters.")
         self.start = start
         self.finish = finish
         self.available_outs = available_outs
@@ -238,45 +315,245 @@ class ClusterGroup:
                 self.available_outs[c] -= 1
                 assert self.available_outs[c] >= 0
 
+    def specify(self):
+        new_connections = []
+        done = set([])
+        for i, (a, b) in enumerate(self.connections):
+            if b is None:
+                ranked_clusters = sorted(self.clusters,
+                                         key=lambda c: (c.rank, c))
+                index = ranked_clusters.index(a)
+                ranked_clusters = [r for r in ranked_clusters
+                                   if r not in (self.start, self.finish)]
+                max_index = len(ranked_clusters)-1
+                index = max(0, min(index-1, max_index))
+                b = random.randint(0, max_index)
+                if index <= b:
+                    b = random.randint(index, b)
+                else:
+                    b = random.randint(b, index)
+                b = ranked_clusters[b].adjacencies
+            else:
+                b = [bb for bb in b.adjacencies if bb not in done]
+            a = [aa for aa in a.adjacencies if aa not in done]
+            a = random.choice(a)
+            if b[0][0].mapid == a[0].mapid and len(b) > 1:
+                # stop adjacencies from linking to themselves
+                b = [bb for bb in b if bb != a]
+            b = random.choice(b)
+            new_connections.append((a, b))
+            done.add(a)
+            done.add(b)
+
+        try:
+            start = [a for a in self.start.adjacencies if a not in done]
+            assert len(start) == 1
+            self.start = start[0]
+            finish = [a for a in self.finish.adjacencies if a not in done]
+            assert len(finish) == 1
+            self.finish = finish[0]
+            done.add(self.start)
+            done.add(self.finish)
+            for c in self.clusters:
+                for a in c.adjacencies:
+                    assert a in done
+        except AssertionError:
+            import pdb; pdb.set_trace()
+
+        self.connections = new_connections
+        assert self.unconnected_exits == (set([x for x in self.start]) |
+                                          set([x for x in self.finish]))
+
     def full_execute(self):
         for _ in xrange(10):
             try:
                 self.connect()
                 break
-            except:
+            except CaveException:
                 pass
         else:
-            raise Exception("Excessive attempts to connect clusters.")
+            raise CaveException("Excessive attempts to connect clusters.")
         self.rank_clusters()
         self.fill_out()
+        self.specify()
+
+    def create_exit_triggers(self):
+        for aa, bb in self.connections:
+            ax = sum([a.x for a in aa]) / len(aa)
+            ay = sum([a.y for a in aa]) / len(aa)
+            bx = sum([b.x for b in bb]) / len(bb)
+            by = sum([b.y for b in bb]) / len(bb)
+            amap = aa[0].mapid
+            bmap = bb[0].mapid
+            for a in aa:
+                a.create_exit_trigger(bmap, bx, by)
+            for b in bb:
+                b.create_exit_trigger(amap, ax, ay)
 
 
-def try_it_out():
+def generate_cave_layout(segment_lengths=None):
+    if segment_lengths is None:
+        segment_lengths = [10, 15, 15, 15, 15, 15, 15]
     clusterpath = path.join(tblpath, "clusters.txt")
+    bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
     clusters = [Cluster.from_string(line) for line in f.readlines()
                 if line.strip()]
     f.close()
-    random.seed(int(time()))
-    while True:
-        try:
-            cg = ClusterGroup(random.sample(clusters, 20))
-            cg.full_execute()
+    mapids = sorted(set([c.mapid for c in clusters]),
+                    key = lambda m: (max(
+                        [len(mo.triggers) for mo in
+                         MapObject.reverse_grid_index(m)]), m))
+    f = open(bannedgridpath)
+    banned_grids = set([int(line, 0x10) for line in f.readlines()
+                        if line.strip()])
+    for m in MapObject.every:
+        if m.index >= 0x100:
             break
-        except:
+        if m.grid_index not in mapids:
             continue
-    print cg.start.rank, cg.start
-    print
-    for a, b in cg.connections:
-        print a.rank, a
-        if b is not None:
-            print b.rank, b
-        else:
-            print b
-        print
-    print cg.finish.rank, cg.finish
-    print
-    import pdb; pdb.set_trace()
+        if m.grid_index not in banned_grids and m.grid_index != m.background:
+            banned_grids.add(m.background)
+    f.close()
+    mapids = [m for m in mapids if m not in banned_grids]
+    chosen = []
+    to_replace = []
+    replace_dict = {}
+    #random.seed(int(time()))
+    while len(chosen) < sum(segment_lengths):
+        max_index = len(mapids)-1
+        choose = random.randint(random.randint(0, max_index), max_index)
+        choose = mapids[choose]
+        mapids.remove(choose)
+        if choose >= 0x100:
+            size = MapGrid2Object.get(choose & 0xFF).size
+            candidates = [m for m in MapGridObject.every
+                          if m.index in mapids and m.size >= size]
+            priority = [m for m in MapGridObject.every
+                        if m.index not in mapids + chosen + to_replace
+                        and m.size >= size]
+            priority = []
+            # TODO: exclude some protected maps
+            if not candidates and not priority:
+                continue
+            sort_func = lambda m: (m.size, m.index)
+            candidates = (sorted(priority, key=sort_func) +
+                          sorted(candidates, key=sort_func))
+            candidates = [c for c in candidates
+                          if MapObject.reverse_grid_index(c.index)]
+            max_index = len(candidates)-1
+            candchoose = random.randint(0, random.randint(0, max_index))
+            candchoose = candidates[candchoose]
+            to_replace.append(candchoose.index)
+            if candchoose not in priority:
+                mapids.remove(candchoose.index)
+            replace_dict[choose] = candchoose.index
+            assert not set(to_replace) & set(mapids)
+        chosen.append(choose)
+
+    for _ in xrange(5):
+        cluster_groups = []
+        for i, segment_length in enumerate(segment_lengths):
+            candidates = [m for m in chosen if m not in
+                          [c.mapid for cg in cluster_groups
+                           for c in cg.clusters]]
+            assert len(candidates) >= segment_length
+            for _ in xrange(5):
+                try:
+                    sampler = random.sample(candidates, segment_length)
+                    sampler = sorted(set([c for c in clusters
+                                          if c.mapid in sampler]))
+                    assert len(sampler) >= segment_length
+                    cg = ClusterGroup(sampler)
+                    cg.full_execute()
+                    cluster_groups.append(cg)
+                    break
+                except CaveException:
+                    continue
+            else:
+                cluster_groups = []
+                break
+        if len(cluster_groups) == len(segment_lengths):
+            break
+    else:
+        print "Retrying cave generation..."
+        return generate_cave_layout(segment_lengths)
+
+    for after, before in replace_dict.items():
+        assert before in to_replace
+        assert after >= 0x100
+        for c in clusters:
+            if c.mapid == after:
+                c.mapid = before
+        bb = MapObject.reverse_grid_index(before)
+        b = bb[0]
+        for b2 in bb:
+            b2.neutralize()
+        aa = MapObject.reverse_grid_index(after)
+        a = MapObject.reverse_grid_index_canonical(after)
+        b.reassign_data(a)
+        b.grid_index = before
+        for a2 in aa:
+            b.acquire_triggers(a2)
+            a2.neutralize()
+        before = MapGridObject.get(before)
+        after = MapGrid2Object.get(after & 0xFF)
+        assert after.size <= before.size
+        before.copy_and_write_map_data(after)
+
+    active_clusters = sorted(set([c for cg in cluster_groups
+                                  for c in cg.clusters]))
+    active_maps = sorted(set([c.mapid for c in active_clusters]))
+    for mapid in active_maps:
+        assert mapid < 0x100
+        aa = MapObject.reverse_grid_index(mapid)
+        a = MapObject.reverse_grid_index_canonical(mapid)
+        if a.grid_index in to_replace:
+            companions = [c for c in MapObject.every
+                          if c.grid_index not in banned_grids
+                          and c.grid_index not in to_replace
+                          and c.grid_index in mapids
+                          and c.index <= 0x100
+                          and c.tileset_index == a.tileset_index
+                          and c.grid_index != c.background]
+            if companions:
+                companions = [c.background for c in companions]
+                chosen, _ = Counter(companions).most_common()[0]
+                a.background = chosen
+            else:
+                a.background = a.grid_index
+                a.bg_properties = 0x86
+        for a2 in aa:
+            if a2 is not a:
+                a.acquire_triggers(a2)
+                a2.neutralize()
+        assert len(MapObject.reverse_grid_index(mapid)) == 1
+        triggers = TriggerObject.getgroup(a.index)
+        for t in triggers:
+            if t.is_exit:
+                t.groupindex = -1
+
+    for m in MapObject.every:
+        m.name_index = 0
+
+    for i, cg in enumerate(cluster_groups):
+        base_rank = sum(segment_lengths[:i])
+        for c in cg.clusters:
+            c.cluster_group = cg
+            m = MapObject.reverse_grid_index_canonical(c.mapid)
+            m.name_index = base_rank + c.rank + 1
+        cg.create_exit_triggers()
+
+    for m in MapObject.every:
+        if m.grid_index not in active_maps:
+            for t in m.triggers:
+                t.groupindex = -1
+
+    return cluster_groups
+
+
+class StatusLoadObject(TableObject): pass
+class StatusSaveObject(TableObject): pass
 
 
 class FormationObject(TableObject):
@@ -325,6 +602,10 @@ class FormationObject(TableObject):
             rank = -1
         self._prerank = rank
         return self.prerank
+
+    @property
+    def is_boss(self):
+        return self.get_bit("no_flee") and self.battle_music != 0
 
     @property
     def rank(self):
@@ -436,17 +717,23 @@ class EncounterObject(TableObject): pass
 class PackObject(TableObject): pass
 class ItemNameObject(NameObject): pass
 class CommandNameObject(NameObject): pass
+class CharacterObject(TableObject): pass
+class InitialEquipObject(TableObject): pass
 
 
 class EventObject(TableObject):
     BASE_POINTER = 0x90200
 
     @property
+    def full_event_pointer(self):
+        return self.BASE_POINTER + self.event_pointer
+
+    @property
     def instructions(self):
         if hasattr(self, "_instructions"):
             return self._instructions
         f = open(get_outfile(), "r+b")
-        f.seek(self.event_pointer + self.BASE_POINTER)
+        f.seek(self.full_event_pointer)
         self._instructions = []
         while True:
             cmd = ord(f.read(1))
@@ -493,12 +780,16 @@ class EventObject(TableObject):
                     set([0xF1, 0xF0, 0xEF, 0xEE, 0xF8, 0xF6]))
 
     @property
-    def battle(self):
+    def battler(self):
         return 0xEC in self.commands
 
     @property
     def flagger(self):
         return bool(set(self.commands) & set([0xF2, 0xF3]))
+
+    @property
+    def map_loader(self):
+        return 0xFE in self.commands
 
 
 class EventCallObject(TableObject):
@@ -542,6 +833,14 @@ class EventCallObject(TableObject):
         for conditions, call in self.cases:
             events.append(EventObject.get(call))
         return events
+
+    @property
+    def crash_game(self):
+        crash_game = [0xFE, 0xFF]
+        for conditions, call in self.cases:
+            if call in crash_game:
+                return True
+        return False
 
 
 class PlacementObject(TableObject):
@@ -587,12 +886,20 @@ class PlacementObject(TableObject):
         return self.speech.events
 
     @property
+    def crash_game(self):
+        return self.speech.crash_game
+
+    @property
     def messager(self):
         return any([e.messager for e in self.events])
 
 
 class SpeechObject(EventCallObject):
     BASE_POINTER = 0x99c00
+
+
+class CommandObject(TableObject): pass
+class MenuCommandObject(TableObject): pass
 
 
 class TileObject(TableObject):
@@ -604,6 +911,25 @@ class TileObject(TableObject):
 class TriggerObject(TableObject):
     # x, y are not modifiable without changing the map data
     # you just end up on the moon
+    TRIGGER_LIST = []
+
+    def __init__(self, *args, **kwargs):
+        super(TriggerObject, self).__init__(*args, **kwargs)
+        if self.filename is None:
+            TriggerObject.TRIGGER_LIST.append(self)
+
+    @classmethod
+    def groupsort(cls, objs):
+        assert len(set([o.groupindex for o in objs])) <= 1
+        objs = sorted(objs, key=lambda o: o.index)
+        treasure = [o for o in objs if o.is_chest]
+        teleport = [o for o in objs if o.is_exit]
+        event = [o for o in objs if o.is_event]
+        return treasure + teleport + event
+
+    @classproperty
+    def every(self):
+        return super(TriggerObject, self).every + TriggerObject.TRIGGER_LIST
 
     def neutralize(self):
         if self.is_event:
@@ -666,6 +992,10 @@ class TriggerObject(TableObject):
         return self.event_call.events
 
     @property
+    def crash_game(self):
+        return self.event_call.crash_game
+
+    @property
     def new_map(self):
         return self.misc1
 
@@ -690,6 +1020,31 @@ class MapObject(TableObject):
         for i, (x, y) in enumerate(self.warps):
             s += "WARP {0:0>2}: {1:0>2} {2:0>2}\n".format(i, x, y)
         return s.strip()
+
+    @staticmethod
+    def reverse_grid_index(grid_index):
+        return [m for m in MapObject.every
+                if m.grid_index == grid_index & 0xFF and
+                m.index & 0x100 == grid_index & 0x100 and
+                m.grid_index & 0xFF < 0xFE]
+
+    @staticmethod
+    def reverse_grid_index_canonical(grid_index):
+        if not hasattr(MapObject, "reverse_canonical_dict"):
+            MapObject.reverse_canonical_dict = {}
+        if grid_index in MapObject.reverse_canonical_dict:
+            return MapObject.reverse_canonical_dict[grid_index]
+        candidates = MapObject.reverse_grid_index(grid_index)
+        temp = [c for c in candidates if c.npc_placements]
+        if temp:
+            if len(temp) == 1:
+                chosen = temp[0]
+            else:
+                chosen = random.choice(temp)
+        else:
+            chosen = candidates[0]
+        MapObject.reverse_canonical_dict[grid_index] = chosen
+        return MapObject.reverse_grid_index_canonical(grid_index)
 
     @property
     def name(self):
@@ -781,6 +1136,28 @@ class MapObject(TableObject):
             summary.add((x, y))
         return summary
 
+    def neutralize(self):
+        self.grid_index = 0xFF
+        #for p in self.npc_placements:
+        #    p.groupindex = -1
+        for t in self.triggers:
+            t.groupindex = -1
+
+    def reassign_data(self, other):
+        if self is other:
+            raise Exception("Both maps are the same.")
+        self.neutralize()
+        self.copy_data(other)
+        #for p in other.npc_placements:
+        #    p.groupindex = self.index
+        self.acquire_triggers(other)
+
+    def acquire_triggers(self, other):
+        if self is other:
+            raise Exception("Both maps are the same.")
+        for t in other.triggers:
+            t.groupindex = self.index
+
 
 class MapGridObject(TableObject):
     BASE_POINTER = 0xb8000
@@ -801,7 +1178,7 @@ class MapGridObject(TableObject):
                 tile = tile & 0x7F
                 data.append(tile)
                 additional = ord(f.read(1))
-                self._compressed += chr(tile)
+                self._compressed += chr(additional)
                 data.extend([tile] * additional)
             else:
                 data.append(tile)
@@ -828,9 +1205,83 @@ class MapGridObject(TableObject):
             s += "\n"
         return s.strip()
 
+    def copy_and_write_map_data(self, other):
+        f = open(get_outfile(), "r+b")
+        f.seek(self.map_pointer + self.BASE_POINTER)
+        f.write(other.compressed)
+        f.close()
+        if hasattr(self, "_map"):
+            delattr(self, "_map")
+
 
 class MapGrid2Object(MapGridObject):
     BASE_POINTER = 0xc0000
+
+
+def setup_opening_event(mapid=0, x=16, y=30):
+    new_event = [
+        0xFA, 0x2c,                 # play opening song
+        #0xDA,                       # toggle screen fade
+        #0xE9, 0x1c,                 # pause 28 cycles
+        #0xFD, 0x00,                 # visual effect
+        0xE8, 0x01,                 # remove DK cecil
+        0xE7, 0x0b,                 # paladin cecil
+        #0xE7, 0x02,                 # kain 1
+        #0xE7, 0x01,                 # DK cecil
+        #0xE7, 0x12,                 # edge
+        0xE7, 0x06,                 # rosa 1
+        0xE7, 0x11,                 # adult rydia
+        0xE7, 0x03,                 # child rydia
+        0xE7, 0x09,                 # porom
+        0xE3, 0x00,                 # remove all statuses
+        0xDE, 0xFE,                 # restore HP
+        0xDF, 0xFE,                 # restore MP
+        0xFE, mapid, x, y, 0x00,    # load map 0 16,30
+        #0xDA,                       # toggle screen fade
+        #0xE9, 0x18,                 # pause 24 cycles
+        0xFF,
+        ]
+    f = open(get_outfile(), "r+b")
+    e = EventObject.get(0x10)
+    f.seek(e.full_event_pointer)
+    f.write("".join(map(chr, new_event)))
+    f.close()
+    adult_rydia = CharacterObject.get(0xE)
+    adult_rydia.copy_data(CharacterObject.get(0x2))
+    adult_rydia.sprite = 11
+    StatusLoadObject.get(0x10).load_slot = 0xE  # adult rydia has child stats
+
+
+def setup_cave():
+    # starting spells - 7c8c0
+    # learning spells - 7c700
+    # 9f338 - staff roll (japanese)
+    # a6e00 - random numbers
+    # 9b2c - default window palette (2 bytes)
+    #       maybe use $0C00 for dark blue or $1022 for purple
+    for t in TriggerObject.every:
+        assert not t.crash_game
+    for t in TriggerObject.every + PlacementObject.every:
+        for e in t.events:
+            if e.flagger or e.map_loader or e.battler:
+                t.neutralize()
+                break
+        else:
+            if t.crash_game and isinstance(t, PlacementObject):
+                t.set_bit("intangible", True)
+    for t in TileObject.every:
+        t.set_bit("encounters", False)
+        if t.get_bit("warp"):
+            t.set_bit("warp", False)
+            t.set_bit("triggerable", True)
+    for m in MapObject.every:
+        m.set_bit("magnetic", False)
+        m.set_bit("exitable", False)
+        m.set_bit("warpable", False)
+    cluster_groups = generate_cave_layout()
+    start = cluster_groups[0].start[0]
+    setup_opening_event(mapid=start.mapid, x=start.x, y=start.y)
+    write_location_names()
 
 
 if __name__ == "__main__":
@@ -841,7 +1292,7 @@ if __name__ == "__main__":
                        if isinstance(g, type) and issubclass(g, TableObject)
                        and g not in [TableObject]]
         run_interface(ALL_OBJECTS, snes=True)
-        get_location_names(get_outfile())
+        get_location_names()
         hexify = lambda x: "{0:0>2}".format("%x" % x)
         numify = lambda x: "{0: >3}".format(x)
         minmax = lambda x: (min(x), max(x))
@@ -853,8 +1304,8 @@ if __name__ == "__main__":
         #    print m.name, m.level & 0x7F, m.hp, m.attack, m.defense, m.magic_defense, "%x" % m.drop_speed, m.xp, m.gil
         #for m in MonsterObject.ranked:
         #    print m, m.hp, m.xp, m.defense, m.magic_defense
-        from collections import Counter
-        used_tilesets = sorted(Counter(m.tileset_index for m in MapObject.every).items(), key=lambda (a, b): b)
+        #from collections import Counter
+        #used_tilesets = sorted(Counter(m.tileset_index for m in MapObject.every).items(), key=lambda (a, b): b)
         '''
         for f in FormationObject.every:
             if "Zeromus" in str(f):
@@ -869,19 +1320,9 @@ if __name__ == "__main__":
                 for flag, truth in conditions:
                     flags.add(flag)
         print [f for f in xrange(0x100) if f not in flags]
-        crash_game = EventObject.get(0xFE)
-        for t in TriggerObject.every:
-            assert crash_game not in t.events
-        for t in TriggerObject.every + PlacementObject.every:
-            for e in t.events:
-                if e.flagger:
-                    t.neutralize()
-                    break
-            else:
-                if crash_game in t.events and isinstance(t, PlacementObject):
-                    t.set_bit("intangible", True)
         '''
-        try_it_out()
+        #print EventObject.get(0x10).pretty_script
+        setup_cave()
         import pdb; pdb.set_trace()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)

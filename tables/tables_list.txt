@@ -1,4 +1,6 @@
 # objname tablefile address count grouped
+StatusLoadObject    status_load_table.txt       669a    20
+StatusSaveObject    status_save_table.txt       671d    20
 FormationObject     formation_table.txt         70000   512
 MonsterNameObject   monster_name_table.txt      71800   224
 MonsterDropObject   monster_drop_table.txt      71f00   64
@@ -9,11 +11,19 @@ EncounterObject     encounter_table.txt         74542   468
 #OverworldPackObject pack_table.txt              74796   16
 PackObject          pack_table.txt              74816   80
 ItemNameObject      item_name_table.txt         78000   256
+EquipmentObject     equipment_table.txt         79100   174
+MedicineObject      medicine_table.txt          79680   46
+PriceObject         price_table.txt             7a450   256
 CommandNameObject   command_name_table.txt      7a7c6   26
+CharacterObject     character_table.txt         7a900   16
+InitialEquipObject  initial_equip_table.txt     7ab00   20
+#LevelUpObject       level_up_table.txt          7b500   20
 EventObject         event_table.txt             90000   256
 EventCallObject     event_call_table.txt        97260   256
 PlacementObject     placement_table.txt         98000   384     pointdelimit 98300 2 0
 SpeechObject        event_call_table.txt        99800   512
+CommandObject       command_table.txt           9fd55   22
+MenuCommandObject   menu_command_table.txt      9fddd   16
 # 16 tilesets 128 tiles each
 TileObject          tile_table.txt              a0e00   2048
 TriggerObject       trigger_table.txt           a8000   384     pointed a8300 2
