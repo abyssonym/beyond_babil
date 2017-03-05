@@ -886,6 +886,10 @@ class EventObject(TableObject):
     def map_loader(self):
         return 0xFE in self.commands
 
+    @property
+    def gfx_changer(self):
+        return 0xDD in self.commands
+
 
 class EventCallObject(TableObject):
     BASE_POINTER = 0x97460
@@ -1385,11 +1389,28 @@ def setup_cave():
     # a6e00 - random numbers
     # 9b2c - default window palette (2 bytes)
     #       maybe use $0C00 for dark blue or $1022 for purple
+    npc_whitelist = set([])
+    npcwpath = path.join(tblpath, "npc_whitelist.txt")
+    for line in open(npcwpath).readlines():
+        line = line.strip()
+        if not line:
+            continue
+        pid, nid = line.split()
+        pid = int(pid, 0x10)
+        if nid == '*':
+            npc = [p for p in PlacementObject.every if p.groupindex == pid]
+        else:
+            nid = int(nid, 0x10)
+            npc = [p for p in PlacementObject.every
+                   if p.groupindex == pid and p.npc_index == nid]
+        npc_whitelist |= set(npc)
     for t in TriggerObject.every:
         assert not t.crash_game
     for t in TriggerObject.every + PlacementObject.every:
+        if t in npc_whitelist:
+            continue
         for e in t.events:
-            if e.flagger or e.map_loader or e.battler:
+            if e.flagger or e.map_loader or e.battler or e.gfx_changer:
                 t.neutralize()
                 break
         else:
