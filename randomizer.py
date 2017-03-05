@@ -68,6 +68,7 @@ def write_location_names():
         f.write(s)
     f.close()
     LOCATION_NAMES = []
+    get_location_names()
 
 
 class CaveException(Exception): pass
@@ -345,20 +346,17 @@ class ClusterGroup:
             done.add(a)
             done.add(b)
 
-        try:
-            start = [a for a in self.start.adjacencies if a not in done]
-            assert len(start) == 1
-            self.start = start[0]
-            finish = [a for a in self.finish.adjacencies if a not in done]
-            assert len(finish) == 1
-            self.finish = finish[0]
-            done.add(self.start)
-            done.add(self.finish)
-            for c in self.clusters:
-                for a in c.adjacencies:
-                    assert a in done
-        except AssertionError:
-            import pdb; pdb.set_trace()
+        start = [a for a in self.start.adjacencies if a not in done]
+        assert len(start) == 1
+        self.start = start[0]
+        finish = [a for a in self.finish.adjacencies if a not in done]
+        assert len(finish) == 1
+        self.finish = finish[0]
+        done.add(self.start)
+        done.add(self.finish)
+        for c in self.clusters:
+            for a in c.adjacencies:
+                assert a in done
 
         self.connections = new_connections
         assert self.unconnected_exits == (set([x for x in self.start]) |
@@ -847,7 +845,17 @@ class PlacementObject(TableObject):
     def neutralize(self):
         self.set_bit("intangible", True)
         self.set_bit("walks", False)
-        self.npc_index = 0
+        self.npc_index = 5
+
+    @classproperty
+    def available_placements(self):
+        indexes = [i for i in xrange(0x100)
+                   if len(PlacementObject.getgroup(i)) == 0]
+
+        if (hasattr(PlacementObject, "canonical_zero")
+               and PlacementObject.canonical_zero in indexes):
+           indexes.remove(PlacementObject.canonical_zero)
+        return indexes
 
     @property
     def x(self):
@@ -892,6 +900,17 @@ class PlacementObject(TableObject):
     @property
     def messager(self):
         return any([e.messager for e in self.events])
+
+    @property
+    def blocker(self):
+        if self.get_bit("walks"):
+            return False
+        if not self.events:
+            return True
+        for e in self.events:
+            if not set(e.commands) - set([0xF1, 0xF0, 0xEF, 0xEE, 0xF6]):
+                return True
+        return False
 
 
 class SpeechObject(EventCallObject):
@@ -1017,8 +1036,11 @@ class MapObject(TableObject):
         s = self.name + "\n"
         for i, t in enumerate(self.triggers):
             s += "{0:0>2}. ".format(i) + t.description + "\n"
-        for i, (x, y) in enumerate(self.warps):
-            s += "WARP {0:0>2}: {1:0>2} {2:0>2}\n".format(i, x, y)
+        try:
+            for i, (x, y) in enumerate(self.warps):
+                s += "WARP {0:0>2}: {1:0>2} {2:0>2}\n".format(i, x, y)
+        except KeyError:
+            s += "WARP ?????\n"
         return s.strip()
 
     @staticmethod
@@ -1050,7 +1072,11 @@ class MapObject(TableObject):
     def name(self):
         #if self.name_index >= len(LOCATION_NAMES):
         #    return "?????"
-        return "%x %s" % (self.index, LOCATION_NAMES[self.name_index & 0x7F])
+        try:
+            name = LOCATION_NAMES[self.name_index & 0x7F]
+        except IndexError:
+            name = "???????"
+        return "%x %s" % (self.index, name)
 
     @property
     def mapgrid(self):
@@ -1125,7 +1151,10 @@ class MapObject(TableObject):
 
     @property
     def npc_placements(self):
-        return PlacementObject.getgroup(self.npc_placement_index)
+        if self.index >= 0x100:
+            return PlacementObject.getgroup(self.npc_placement_index | 0x100)
+        else:
+            return PlacementObject.getgroup(self.npc_placement_index)
 
     @property
     def exit_summary(self):
@@ -1148,8 +1177,9 @@ class MapObject(TableObject):
             raise Exception("Both maps are the same.")
         self.neutralize()
         self.copy_data(other)
-        #for p in other.npc_placements:
-        #    p.groupindex = self.index
+        for p in other.npc_placements:
+            p.groupindex = -1
+        self.npc_placement_index = PlacementObject.canonical_zero
         self.acquire_triggers(other)
 
     def acquire_triggers(self, other):
@@ -1267,21 +1297,26 @@ def setup_cave():
                 t.neutralize()
                 break
         else:
-            if t.crash_game and isinstance(t, PlacementObject):
+            if isinstance(t, PlacementObject) and (t.crash_game or t.blocker):
                 t.set_bit("intangible", True)
     for t in TileObject.every:
         t.set_bit("encounters", False)
         if t.get_bit("warp"):
             t.set_bit("warp", False)
             t.set_bit("triggerable", True)
+    available_placements = PlacementObject.available_placements
+    PlacementObject.canonical_zero = available_placements[0]
     for m in MapObject.every:
         m.set_bit("magnetic", False)
         m.set_bit("exitable", False)
         m.set_bit("warpable", False)
+        if len(m.npc_placements) == 0:
+            m.npc_placement_index = PlacementObject.canonical_zero
     cluster_groups = generate_cave_layout()
     start = cluster_groups[0].start[0]
     setup_opening_event(mapid=start.mapid, x=start.x, y=start.y)
     write_location_names()
+    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
@@ -1323,7 +1358,6 @@ if __name__ == "__main__":
         '''
         #print EventObject.get(0x10).pretty_script
         setup_cave()
-        import pdb; pdb.set_trace()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
