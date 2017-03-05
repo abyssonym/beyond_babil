@@ -66,6 +66,9 @@ def write_location_names():
             s += chr(int(c) + 0x80)
         s += chr(0)
         f.write(s)
+    for c in "BOSS":
+        f.write(chr(ord(c)+1))
+    f.write(chr(0))
     f.close()
     LOCATION_NAMES = []
     get_location_names()
@@ -90,6 +93,21 @@ class ClusterExit(ReprSortMixin):
         self.cluster = cluster
         self.x = x
         self.y = y
+        if (self.mapid, x, y) in ClusterExit.exit_offsets:
+            xx, yy = ClusterExit.exit_offsets[(self.mapid, x, y)]
+            self.offset = (xx, yy)
+
+    @property
+    def xx(self):
+        if hasattr(self, "offset"):
+            return self.offset[0]
+        return self.x
+
+    @property
+    def yy(self):
+        if hasattr(self, "offset"):
+            return self.offset[1]
+        return self.y
 
     def __repr__(self):
         return "%x: %s %s" % (self.cluster.mapid, self.x, self.y)
@@ -110,12 +128,33 @@ class ClusterExit(ReprSortMixin):
     def cluster_group(self):
         return self.cluster.cluster_group
 
-    def create_exit_trigger(self, mapid, x, y):
+    @classproperty
+    def exit_offsets(self):
+        if hasattr(ClusterExit, "_exit_offsets"):
+            return ClusterExit._exit_offsets
+        ClusterExit._exit_offsets = {}
+        eopath = path.join(tblpath, "exit_offsets.txt")
+        for line in open(eopath).readlines():
+            line = line.strip()
+            if not line:
+                continue
+            mapid, coords = line.split(":")
+            mapid = int(mapid, 0x10)
+            source, offset = coords.split()
+            sx, sy = tuple(map(int, source.split(".")))
+            ox, oy = tuple(map(int, offset.split(".")))
+            ClusterExit._exit_offsets[mapid, sx, sy] = ox, oy
+        return ClusterExit.exit_offsets
+
+    def create_exit_trigger(self, mapid, x, y, use_given_mapid=False):
         assert mapid < 0xFE
         assert x < 32
         assert y < 32
         selfmap = MapObject.reverse_grid_index_canonical(self.mapid).index
-        othermap = MapObject.reverse_grid_index_canonical(mapid).index
+        if use_given_mapid:
+            othermap = mapid
+        else:
+            othermap = MapObject.reverse_grid_index_canonical(mapid).index
         index = ((1 << 16) | (selfmap << 8)
                  | len(TriggerObject.getgroup(selfmap)))
         for t in TriggerObject.getgroup(selfmap):
@@ -377,10 +416,10 @@ class ClusterGroup:
 
     def create_exit_triggers(self):
         for aa, bb in self.connections:
-            ax = sum([a.x for a in aa]) / len(aa)
-            ay = sum([a.y for a in aa]) / len(aa)
-            bx = sum([b.x for b in bb]) / len(bb)
-            by = sum([b.y for b in bb]) / len(bb)
+            ax = sum([a.xx for a in aa]) / len(aa)
+            ay = sum([a.yy for a in aa]) / len(aa)
+            bx = sum([b.xx for b in bb]) / len(bb)
+            by = sum([b.yy for b in bb]) / len(bb)
             amap = aa[0].mapid
             bmap = bb[0].mapid
             for a in aa:
@@ -390,6 +429,7 @@ class ClusterGroup:
 
 
 def generate_cave_layout(segment_lengths=None):
+    LUNG_INDEX = 0xbc
     if segment_lengths is None:
         segment_lengths = [10, 15, 15, 15, 15, 15, 15]
     clusterpath = path.join(tblpath, "clusters.txt")
@@ -405,6 +445,9 @@ def generate_cave_layout(segment_lengths=None):
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
                         if line.strip()])
+    giant_lung = MapObject.reverse_grid_index_canonical(LUNG_INDEX)
+    banned_grids.add(giant_lung.grid_index)
+    banned_grids.add(giant_lung.background)
     for m in MapObject.every:
         if m.index >= 0x100:
             break
@@ -547,7 +590,61 @@ def generate_cave_layout(segment_lengths=None):
             for t in m.triggers:
                 t.groupindex = -1
 
-    return cluster_groups
+    used_maps = set([MapObject.reverse_grid_index_canonical(m)
+                     for m in active_maps])
+    used_maps |= set([MapObject.get(m.background) for m in used_maps])
+    used_maps.add(giant_lung)
+    used_maps.add(MapObject.get(giant_lung.background))
+    unused_maps = [m for m in MapObject.every
+                   if m not in used_maps and m.index < 0xF8
+                   and m.grid_index not in banned_grids]
+    lungs = []
+    for aa, bb in zip(cluster_groups, cluster_groups[1:]):
+        aa = aa.finish
+        bb = bb.start
+        lung = unused_maps.pop(0)
+        lung.neutralize()
+        lung.copy_data(giant_lung)
+        lung.npc_placement_index = PlacementObject.canonical_zero
+        lung.name_index = 101
+        base_index = (1 << 17) | (lung.index << 8)
+
+        ax = sum([a.xx for a in aa]) / len(aa)
+        ay = sum([a.yy for a in aa]) / len(aa)
+        amap = aa[0].mapid
+        t = TriggerObject(index=base_index)
+        t.groupindex = lung.index
+        t.x = 15
+        t.y = 24
+        t.misc1 = MapObject.reverse_grid_index_canonical(amap).index
+        t.misc2 = ax | 0x80
+        t.misc3 = ay
+        for a in aa:
+            a.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
+
+        bx = sum([b.xx for b in bb]) / len(bb)
+        by = sum([b.yy for b in bb]) / len(bb)
+        bmap = bb[0].mapid
+        t = TriggerObject(index=base_index+1)
+        t.groupindex = lung.index
+        t.x = 15
+        t.y = 04
+        t.misc1 = MapObject.reverse_grid_index_canonical(bmap).index
+        t.misc2 = bx | 0x80
+        t.misc3 = by
+        for b in bb:
+            b.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
+
+        # that center tile calls weird events without a trigger there
+        t = TriggerObject(index=base_index+2)
+        t.groupindex = lung.index
+        t.x = 15
+        t.y = 15
+        t.misc1 = 0xFF
+        t.misc3 = 0
+        t.neutralize()
+
+    return cluster_groups, lungs
 
 
 class StatusLoadObject(TableObject): pass
@@ -908,7 +1005,7 @@ class PlacementObject(TableObject):
         if not self.events:
             return True
         for e in self.events:
-            if not set(e.commands) - set([0xF1, 0xF0, 0xEF, 0xEE, 0xF6]):
+            if not set(e.commands) - set([0xF1, 0xF0, 0xEF, 0xEE, 0xF6, 0xFF]):
                 return True
         return False
 
@@ -1167,8 +1264,7 @@ class MapObject(TableObject):
 
     def neutralize(self):
         self.grid_index = 0xFF
-        #for p in self.npc_placements:
-        #    p.groupindex = -1
+        self.npc_placement_index = PlacementObject.canonical_zero
         for t in self.triggers:
             t.groupindex = -1
 
@@ -1304,6 +1400,8 @@ def setup_cave():
         if t.get_bit("warp"):
             t.set_bit("warp", False)
             t.set_bit("triggerable", True)
+    import pdb; pdb.set_trace()
+
     available_placements = PlacementObject.available_placements
     PlacementObject.canonical_zero = available_placements[0]
     for m in MapObject.every:
@@ -1312,11 +1410,10 @@ def setup_cave():
         m.set_bit("warpable", False)
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
-    cluster_groups = generate_cave_layout()
+    cluster_groups, lungs = generate_cave_layout()
     start = cluster_groups[0].start[0]
     setup_opening_event(mapid=start.mapid, x=start.x, y=start.y)
     write_location_names()
-    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
