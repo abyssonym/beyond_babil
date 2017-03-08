@@ -431,7 +431,8 @@ class ClusterGroup:
 def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     if segment_lengths is None:
-        segment_lengths = [10, 15, 15, 15, 15, 15, 15]
+        #segment_lengths = [10, 15, 15, 15, 15, 15, 15]
+        segment_lengths = [10] + ([11] * 7) + [12]
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
@@ -577,12 +578,24 @@ def generate_cave_layout(segment_lengths=None):
     for m in MapObject.every:
         m.name_index = 0
 
+    bgm_candidates = [
+        6, 13, 49,                              # overworld themes
+        12, 23, 25, 27, 28, 30, 37, 40, 52,     # dungeon themes
+        20, 32, 46, 50,                         # castle themes
+        51,                                     # town themes
+        #15,                                     # misc themes
+        ]
+    bgms = random.sample(bgm_candidates, len(cluster_groups))
+    for cg, bgm in zip(cluster_groups, bgms):
+        cg.music = bgm
+
     for i, cg in enumerate(cluster_groups):
         base_rank = sum(segment_lengths[:i])
         for c in cg.clusters:
             c.cluster_group = cg
             m = MapObject.reverse_grid_index_canonical(c.mapid)
             m.name_index = base_rank + c.rank + 1
+            m.music = cg.music
         cg.create_exit_triggers()
 
     for m in MapObject.every:
@@ -598,15 +611,31 @@ def generate_cave_layout(segment_lengths=None):
     unused_maps = [m for m in MapObject.every
                    if m not in used_maps and m.index < 0xF8
                    and m.grid_index not in banned_grids]
+    for u in unused_maps:
+        u.neutralize()
+    used_events = set([e for m in MapObject.every for e in m.events])
+    unused_events = [e for e in EventObject.every if e not in used_events]
+    unused_events = sorted(unused_events, key=lambda e: (e.size, e.index))
+    used_event_calls = set([e for m in MapObject.every for e in m.event_calls])
+    unused_event_calls = [e for e in EventCallObject.every
+                          if e not in used_event_calls]
+    unused_event_calls = sorted(unused_event_calls,
+                                key=lambda e: (e.size, e.index))
+    used_speeches = set([e for m in MapObject.every for e in m.speeches])
+    unused_speeches = [e for e in SpeechObject.every if e not in used_speeches]
+    unused_flags = range(88, 0xFE)
+    unused_flags.remove(225)
+
+    LUNG_SONG = 2  # long way to go
     lungs = []
     for aa, bb in zip(cluster_groups, cluster_groups[1:]):
         aa = aa.finish
         bb = bb.start
-        lung = unused_maps.pop(0)
-        lung.neutralize()
+        lung = unused_maps.pop()
         lung.copy_data(giant_lung)
         lung.npc_placement_index = PlacementObject.canonical_zero
         lung.name_index = 101
+        lung.music = LUNG_SONG
         base_index = (1 << 17) | (lung.index << 8)
 
         ax = sum([a.xx for a in aa]) / len(aa)
@@ -636,13 +665,46 @@ def generate_cave_layout(segment_lengths=None):
             b.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
 
         # that center tile calls weird events without a trigger there
+        formation = 0
+        flag = unused_flags.pop()
+        boss_event = [
+            #0xD8,
+            #0xE9, 0x08,
+            0xFB, 0x47,
+            0xFD, 0x07,
+            0xFB, 0x00,
+            0xEC, formation,
+            0xF2, flag,
+            0xFA, LUNG_SONG,
+            0xFF,
+            ]
+        candidate_events = [e for e in unused_events
+                            if e.size >= len(boss_event)]
+        boss_chosen = candidate_events.pop(0)
+        unused_events.remove(boss_chosen)
+        boss_chosen.overwrite_event(boss_event)
+        yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF]
+        candidate_events = [e for e in unused_events
+                            if e.size >= len(yesno_boss_event)]
+        yesno_boss_chosen = candidate_events.pop(0)
+        unused_events.remove(yesno_boss_chosen)
+        yesno_boss_chosen.overwrite_event(yesno_boss_event)
+        cases = [([(flag, False)], boss_chosen.index),
+                 ([], yesno_boss_chosen.index)]
+        size = len(EventCallObject.cases_to_bytecode(cases))
+        candidate_event_calls = [e for e in unused_event_calls
+                                 if e.size >= size]
+        event_call = candidate_event_calls.pop(0)
+        event_call.overwrite_event_call(cases)
+        unused_event_calls.remove(event_call)
         t = TriggerObject(index=base_index+2)
         t.groupindex = lung.index
         t.x = 15
         t.y = 15
         t.misc1 = 0xFF
+        t.misc2 = event_call.index
         t.misc3 = 0
-        t.neutralize()
+
 
     return cluster_groups, lungs
 
@@ -890,6 +952,14 @@ class EventObject(TableObject):
     def gfx_changer(self):
         return 0xDD in self.commands
 
+    def overwrite_event(self, data):
+        f = open(get_outfile(), "r+b")
+        f.seek(self.full_event_pointer)
+        f.write("".join(map(chr, data)))
+        f.close()
+        if hasattr(self, "_instructions"):
+            delattr(self, "_instructions")
+
 
 class EventCallObject(TableObject):
     BASE_POINTER = 0x97460
@@ -903,16 +973,20 @@ class EventCallObject(TableObject):
             return 0
 
     @property
+    def full_event_call_pointer(self):
+        return self.BASE_POINTER + self.event_call_pointer
+
+    @property
     def cases(self):
         if hasattr(self, "_cases"):
             return self._cases
         self._cases = []
 
         f = open(get_outfile(), "r+b")
-        f.seek(self.event_call_pointer + self.BASE_POINTER)
+        f.seek(self.full_event_call_pointer)
         conditions = []
         while True:
-            if f.tell() >= self.BASE_POINTER + self.event_call_pointer + self.size:
+            if f.tell() >= self.full_event_call_pointer + self.size:
                 break
             peek = ord(f.read(1))
             if peek == 0xFF:
@@ -940,6 +1014,25 @@ class EventCallObject(TableObject):
             if call in crash_game:
                 return True
         return False
+
+    @staticmethod
+    def cases_to_bytecode(cases):
+        s = ""
+        for conditions, call in cases:
+            for flag, truth in conditions:
+                assert flag <= 0xFD
+                if truth:
+                    s += chr(0xFE)
+                s += chr(flag)
+            s += chr(0xFF)
+            s += chr(call)
+        return s
+
+    def overwrite_event_call(self, cases):
+        f = open(get_outfile(), "r+b")
+        f.seek(self.full_event_call_pointer)
+        f.write(EventCallObject.cases_to_bytecode(cases))
+        f.close()
 
 
 class PlacementObject(TableObject):
@@ -1149,7 +1242,8 @@ class MapObject(TableObject):
         return [m for m in MapObject.every
                 if m.grid_index == grid_index & 0xFF and
                 m.index & 0x100 == grid_index & 0x100 and
-                m.grid_index & 0xFF < 0xFE]
+                m.grid_index & 0xFF < 0xFE and
+                m.index & 0xFF < 0xED]
 
     @staticmethod
     def reverse_grid_index_canonical(grid_index):
@@ -1247,8 +1341,21 @@ class MapObject(TableObject):
         return [c for c in self.triggers if c.is_chest]
 
     @property
-    def events(self):
+    def event_triggers(self):
         return [e for e in self.triggers if e.is_event]
+
+    @property
+    def events(self):
+        return ([e for t in self.event_triggers for e in t.events] +
+                [e for p in self.npc_placements for e in p.events])
+
+    @property
+    def event_calls(self):
+        return [t.event_call for t in self.event_triggers]
+
+    @property
+    def speeches(self):
+        return [p.speech for p in self.npc_placements]
 
     @property
     def npc_placements(self):
@@ -1371,11 +1478,8 @@ def setup_opening_event(mapid=0, x=16, y=30):
         #0xE9, 0x18,                 # pause 24 cycles
         0xFF,
         ]
-    f = open(get_outfile(), "r+b")
     e = EventObject.get(0x10)
-    f.seek(e.full_event_pointer)
-    f.write("".join(map(chr, new_event)))
-    f.close()
+    e.overwrite_event(new_event)
     adult_rydia = CharacterObject.get(0xE)
     adult_rydia.copy_data(CharacterObject.get(0x2))
     adult_rydia.sprite = 11
@@ -1416,12 +1520,22 @@ def setup_cave():
         else:
             if isinstance(t, PlacementObject) and (t.crash_game or t.blocker):
                 t.set_bit("intangible", True)
+    tblkpath = path.join(tblpath, "trigger_blacklist.txt")
+    for line in open(tblkpath):
+        line = line.strip()
+        if not line:
+            continue
+        mapid, x, y = line.split()
+        mapid = int(mapid, 0x10)
+        x, y = int(x), int(y)
+        for t in TriggerObject.every:
+            if t.groupindex == mapid and t.x == x and t.y == y and t.is_event:
+                t.neutralize()
     for t in TileObject.every:
         t.set_bit("encounters", False)
         if t.get_bit("warp"):
             t.set_bit("warp", False)
             t.set_bit("triggerable", True)
-    import pdb; pdb.set_trace()
 
     available_placements = PlacementObject.available_placements
     PlacementObject.canonical_zero = available_placements[0]
