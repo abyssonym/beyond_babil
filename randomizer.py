@@ -155,21 +155,15 @@ class ClusterExit(ReprSortMixin):
             othermap = mapid
         else:
             othermap = MapObject.reverse_grid_index_canonical(mapid).index
-        index = ((1 << 16) | (selfmap << 8)
-                 | len(TriggerObject.getgroup(selfmap)))
         for t in TriggerObject.getgroup(selfmap):
             if (t.x, t.y) == (self.x, self.y):
                 # XXX: what to do about non-exit triggers?
                 if t.is_exit:
                     # dangling exit
                     return
-        t = TriggerObject(index=index)
-        t.groupindex = selfmap
-        t.x = self.x
-        t.y = self.y
-        t.misc1 = othermap
-        t.misc2 = x | 0x80
-        t.misc3 = y
+        t = TriggerObject.create_trigger(
+            mapid=selfmap, x=self.x, y=self.y,
+            misc1=othermap, misc2=(x|0x80), misc3=y)
         assert t.new_map == othermap
         assert t.dest_x == x
         assert t.dest_y == y
@@ -433,6 +427,7 @@ def generate_cave_layout(segment_lengths=None):
     if segment_lengths is None:
         #segment_lengths = [10, 15, 15, 15, 15, 15, 15]
         segment_lengths = [10] + ([11] * 7) + [12]
+        segment_lengths = [3, 3]
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
@@ -462,11 +457,27 @@ def generate_cave_layout(segment_lengths=None):
     to_replace = []
     replace_dict = {}
     #random.seed(int(time()))
+    LUNAR_WHALE_INDEX = 0x12c
+    ZEMUS_INDEX = 0x172
+    lunar_whale = MapGridObject.superget(LUNAR_WHALE_INDEX)
+    lunar_whale_map = lunar_whale.map
+    lunar_whale_map[10][7] = 0x7F
+    lunar_whale.overwrite_map_data(lunar_whale_map)
+    zemus = MapGridObject.superget(ZEMUS_INDEX)
+    zemus_map = zemus.map
+    zemus_map[15][15] = 0x45
+    zemus.overwrite_map_data(zemus_map)
+    special_maps = [LUNAR_WHALE_INDEX, ZEMUS_INDEX]
     while len(chosen) < sum(segment_lengths):
-        max_index = len(mapids)-1
-        choose = random.randint(random.randint(0, max_index), max_index)
-        choose = mapids[choose]
-        mapids.remove(choose)
+        for m in special_maps:
+            if m not in replace_dict:
+                choose = m
+                break
+        else:
+            max_index = len(mapids)-1
+            choose = random.randint(random.randint(0, max_index), max_index)
+            choose = mapids[choose]
+            mapids.remove(choose)
         if choose >= 0x100:
             size = MapGrid2Object.get(choose & 0xFF).size
             candidates = [m for m in MapGridObject.every
@@ -491,7 +502,9 @@ def generate_cave_layout(segment_lengths=None):
                 mapids.remove(candchoose.index)
             replace_dict[choose] = candchoose.index
             assert not set(to_replace) & set(mapids)
-        chosen.append(choose)
+        if choose not in special_maps:
+            chosen.append(choose)
+    assert not set(chosen) & set(special_maps)
 
     for _ in xrange(5):
         cluster_groups = []
@@ -499,6 +512,7 @@ def generate_cave_layout(segment_lengths=None):
             candidates = [m for m in chosen if m not in
                           [c.mapid for cg in cluster_groups
                            for c in cg.clusters]]
+            assert not set(candidates) & set(special_maps)
             assert len(candidates) >= segment_length
             for _ in xrange(5):
                 try:
@@ -541,7 +555,7 @@ def generate_cave_layout(segment_lengths=None):
         before = MapGridObject.get(before)
         after = MapGrid2Object.get(after & 0xFF)
         assert after.size <= before.size
-        before.copy_and_write_map_data(after)
+        before.overwrite_map_data(after)
 
     active_clusters = sorted(set([c for cg in cluster_groups
                                   for c in cg.clusters]))
@@ -603,10 +617,18 @@ def generate_cave_layout(segment_lengths=None):
             for t in m.triggers:
                 t.groupindex = -1
 
+    lunar_whale = MapObject.reverse_grid_index_canonical(
+        replace_dict[LUNAR_WHALE_INDEX])
+    zemus = MapObject.reverse_grid_index_canonical(replace_dict[ZEMUS_INDEX])
+    zemus.background = zemus.index
+    zemus.bg_properties = 0x86
+
     used_maps = set([MapObject.reverse_grid_index_canonical(m)
                      for m in active_maps])
     used_maps |= set([MapObject.get(m.background) for m in used_maps])
     used_maps.add(giant_lung)
+    used_maps.add(lunar_whale)
+    used_maps.add(zemus)
     used_maps.add(MapObject.get(giant_lung.background))
     unused_maps = [m for m in MapObject.every
                    if m not in used_maps and m.index < 0xF8
@@ -626,6 +648,33 @@ def generate_cave_layout(segment_lengths=None):
     unused_flags = range(88, 0xFE)
     unused_flags.remove(225)
 
+    start = cluster_groups[0].start
+    x = sum([a.xx for a in start]) / len(start)
+    y = sum([a.yy for a in start]) / len(start)
+    mapid = start[0].mapid
+    TriggerObject.create_trigger(
+        mapid=lunar_whale.index, x=2, y=13,
+        misc1=mapid, misc2=(x|0x80), misc3=y)
+    TriggerObject.create_trigger(
+        mapid=lunar_whale.index, x=12, y=13,
+        misc1=mapid, misc2=(x|0x80), misc3=y)
+    for a in start:
+        TriggerObject.create_trigger(
+            mapid=a.mapid, x=a.x, y=a.y,
+            misc1=lunar_whale.index, misc2=(2|0x80), misc3=13)
+
+    finish = cluster_groups[-1].finish
+    x = sum([a.xx for a in finish]) / len(finish)
+    y = sum([a.yy for a in finish]) / len(finish)
+    mapid = finish[0].mapid
+    TriggerObject.create_trigger(
+        mapid=zemus.index, x=15, y=23,
+        misc1=mapid, misc2=(x|0x80), misc3=y)
+    for a in finish:
+        TriggerObject.create_trigger(
+            mapid=a.mapid, x=a.x, y=a.y,
+            misc1=zemus.index, misc2=(15|0x80), misc3=23)
+
     LUNG_SONG = 2  # long way to go
     lungs = []
     for aa, bb in zip(cluster_groups, cluster_groups[1:]):
@@ -636,35 +685,27 @@ def generate_cave_layout(segment_lengths=None):
         lung.npc_placement_index = PlacementObject.canonical_zero
         lung.name_index = 101
         lung.music = LUNG_SONG
-        base_index = (1 << 17) | (lung.index << 8)
 
         ax = sum([a.xx for a in aa]) / len(aa)
         ay = sum([a.yy for a in aa]) / len(aa)
         amap = aa[0].mapid
-        t = TriggerObject(index=base_index)
-        t.groupindex = lung.index
-        t.x = 15
-        t.y = 24
-        t.misc1 = MapObject.reverse_grid_index_canonical(amap).index
-        t.misc2 = ax | 0x80
-        t.misc3 = ay
+        t = TriggerObject.create_trigger(
+            mapid=lung.index, x=15, y=24,
+            misc1=MapObject.reverse_grid_index_canonical(amap).index,
+            misc2=(ax|0x80), misc3=ay)
         for a in aa:
             a.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
 
         bx = sum([b.xx for b in bb]) / len(bb)
         by = sum([b.yy for b in bb]) / len(bb)
         bmap = bb[0].mapid
-        t = TriggerObject(index=base_index+1)
-        t.groupindex = lung.index
-        t.x = 15
-        t.y = 04
-        t.misc1 = MapObject.reverse_grid_index_canonical(bmap).index
-        t.misc2 = bx | 0x80
-        t.misc3 = by
+        t = TriggerObject.create_trigger(
+            mapid=lung.index, x=15, y=04,
+            misc1=MapObject.reverse_grid_index_canonical(bmap).index,
+            misc2=(bx|0x80), misc3=by)
         for b in bb:
             b.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
 
-        # that center tile calls weird events without a trigger there
         formation = 0
         flag = unused_flags.pop()
         boss_event = [
@@ -697,14 +738,9 @@ def generate_cave_layout(segment_lengths=None):
         event_call = candidate_event_calls.pop(0)
         event_call.overwrite_event_call(cases)
         unused_event_calls.remove(event_call)
-        t = TriggerObject(index=base_index+2)
-        t.groupindex = lung.index
-        t.x = 15
-        t.y = 15
-        t.misc1 = 0xFF
-        t.misc2 = event_call.index
-        t.misc3 = 0
-
+        t = TriggerObject.create_trigger(
+            mapid=lung.index, x=15, y=15,
+            misc1=0xFF, misc2=event_call.index, misc3=0)
 
     return cluster_groups, lungs
 
@@ -1144,6 +1180,19 @@ class TriggerObject(TableObject):
     def every(self):
         return super(TriggerObject, self).every + TriggerObject.TRIGGER_LIST
 
+    @staticmethod
+    def create_trigger(mapid, x, y, misc1, misc2, misc3):
+        existing = len(TriggerObject.getgroup(mapid))
+        index = (1 << 16) | (mapid << 8) | existing
+        t = TriggerObject(index=index)
+        t.groupindex = mapid
+        t.x = x
+        t.y = y
+        t.misc1 = misc1
+        t.misc2 = misc2
+        t.misc3 = misc3
+        return t
+
     def neutralize(self):
         if self.is_event:
             self.misc2 = 2
@@ -1442,10 +1491,43 @@ class MapGridObject(TableObject):
             s += "\n"
         return s.strip()
 
-    def copy_and_write_map_data(self, other):
+    @staticmethod
+    def superget(index):
+        if index < 0x100:
+            return MapGridObject.get(index)
+        else:
+            return MapGrid2Object.get(index & 0xFF)
+
+    @staticmethod
+    def recompress(data):
+        data = [tile for row in data for tile in row]
+        previous = None
+        compressed = ""
+        runlength = 0
+        for tile in data + [None]:
+            if tile == previous:
+                runlength += 1
+                if runlength == 255:
+                    compressed += chr(previous | 0x80) + chr(0xFF)
+                    runlength = 0
+            elif previous is not None:
+                if runlength > 0:
+                    compressed += chr(previous | 0x80) + chr(runlength)
+                    runlength = 0
+                else:
+                    compressed += chr(previous)
+            previous = tile
+        return compressed
+
+    def overwrite_map_data(self, data):
+        if isinstance(data, MapGridObject):
+            data = data.compressed
+        else:
+            data = MapGridObject.recompress(data)
+        assert len(data) <= self.size
         f = open(get_outfile(), "r+b")
         f.seek(self.map_pointer + self.BASE_POINTER)
-        f.write(other.compressed)
+        f.write(data)
         f.close()
         if hasattr(self, "_map"):
             delattr(self, "_map")
