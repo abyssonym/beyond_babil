@@ -644,7 +644,12 @@ def generate_cave_layout(segment_lengths=None):
     unused_event_calls = sorted(unused_event_calls,
                                 key=lambda e: (e.size, e.index))
     used_speeches = set([e for m in MapObject.every for e in m.speeches])
-    unused_speeches = [e for e in SpeechObject.every if e not in used_speeches]
+    unused_speeches = [e for e in SpeechObject.every if e not in used_speeches
+                       and e.index > 0]
+    used_placement_indexes = set([m.npc_placement_index
+                                  for m in MapObject.every])
+    unused_placement_indexes = [p for p in range(0xFE)
+                                if p not in used_placement_indexes]
     unused_flags = range(88, 0xFE)
     unused_flags.remove(225)
 
@@ -674,6 +679,70 @@ def generate_cave_layout(segment_lengths=None):
         TriggerObject.create_trigger(
             mapid=a.mapid, x=a.x, y=a.y,
             misc1=zemus.index, misc2=(15|0x80), misc3=23)
+
+    warriors = [4, 10, 12, 9, 1, 6, 0]
+    mages = [5, 11, 3]
+    twins = [7, 8]
+    character_actors = {
+        9: 10,
+        10: 13,
+        11: 2,
+        12: 17,
+    }
+    placement_index = unused_placement_indexes.pop()
+    lunar_whale.npc_placement_index = placement_index
+    for p in lunar_whale.npc_placements:
+        p.groupindex = -1
+
+    def create_recruitment_npc(character, x, y):
+        if character in character_actors:
+            actor = character_actors[character]
+        else:
+            actor = character
+        event = [
+            0xF8, 0x7B,
+            0xE7, actor+1,
+            0xFF,
+            0xE8, actor+1,
+            0xFF,
+            ]
+        candidate_events = [e for e in unused_events
+                            if e.size >= len(event)]
+        chosen = candidate_events.pop(0)
+        unused_events.remove(chosen)
+        chosen.overwrite_event(event)
+        cases = [([], chosen.index)]
+        size = len(SpeechObject.cases_to_bytecode(cases))
+        candidate_speeches = [e for e in unused_speeches
+                              if e.size >= size
+                              and e.index < 0x100]
+        speech = candidate_speeches.pop(0)
+        speech.overwrite_event_call(cases)
+        unused_speeches.remove(speech)
+        NPCSpriteObject.get(speech.index).sprite = character
+        NPCVisibleObject.set_visible(speech.index)
+        p = PlacementObject.create_npc_placement(
+            speech.index, lunar_whale.npc_placement_index, x, y)
+        p.set_bit("marches", True)
+        p.set_bit("turns", False)
+        p.set_bit("walks", False)
+        p.set_bit("intangible", False)
+        assert p.facing == 2
+
+    for i, c in enumerate(warriors):
+        x = 4 + i
+        y = 7
+        create_recruitment_npc(c, x, y)
+
+    for i, c in enumerate(mages):
+        x = 2
+        y = 8 + i
+        create_recruitment_npc(c, x, y)
+
+    for i, c in enumerate(twins):
+        x = 12
+        y = 8 + i
+        create_recruitment_npc(c, x, y)
 
     LUNG_SONG = 2  # long way to go
     lungs = []
@@ -997,6 +1066,32 @@ class EventObject(TableObject):
             delattr(self, "_instructions")
 
 
+class NPCSpriteObject(TableObject): pass
+
+
+class NPCVisibleObject(TableObject):
+    @staticmethod
+    def set_visible(index, truth=True):
+        my_index = index / 8
+        bit = 1 << (index % 8)
+        nv = NPCVisibleObject.get(my_index)
+        if truth:
+            nv.visible |= bit
+        elif nv.visible & bit:
+            nv.visible ^= bit
+
+    @staticmethod
+    def set_invisible(index):
+        NPCVisibleObject.set_visible(index, False)
+
+    @staticmethod
+    def get_visible(index):
+        my_index = index / 8
+        bit = 1 << (index % 8)
+        nv = NPCVisibleObject.get(my_index)
+        return bool(nv.visible & bit)
+
+
 class EventCallObject(TableObject):
     BASE_POINTER = 0x97460
 
@@ -1072,10 +1167,37 @@ class EventCallObject(TableObject):
 
 
 class PlacementObject(TableObject):
+    PLACEMENT_LIST = []
+
+    def __init__(self, *args, **kwargs):
+        super(PlacementObject, self).__init__(*args, **kwargs)
+        if self.filename is None:
+            PlacementObject.PLACEMENT_LIST.append(self)
+
+    @classproperty
+    def every(self):
+        return super(PlacementObject, self).every + PlacementObject.PLACEMENT_LIST
+
+    def cleanup(self):
+        assert not self.npc_index == 0
+
     def neutralize(self):
         self.set_bit("intangible", True)
         self.set_bit("walks", False)
         self.npc_index = 5
+
+    @staticmethod
+    def create_npc_placement(speech_index, placement_index, x, y):
+        existing = len(PlacementObject.getgroup(placement_index))
+        index = (1 << 16) | (placement_index << 8) | existing
+        p = PlacementObject(index=index)
+        p.groupindex = placement_index
+        p.npc_index = speech_index
+        p.xmisc = x & 0x1F
+        p.ymisc = y & 0x1F
+        p.misc = 2
+        existing = len(PlacementObject.getgroup(placement_index))
+        return p
 
     @classproperty
     def available_placements(self):
@@ -1548,10 +1670,10 @@ def setup_opening_event(mapid=0, x=16, y=30):
         #0xE7, 0x02,                 # kain 1
         #0xE7, 0x01,                 # DK cecil
         #0xE7, 0x12,                 # edge
-        0xE7, 0x06,                 # rosa 1
-        0xE7, 0x11,                 # adult rydia
-        0xE7, 0x03,                 # child rydia
-        0xE7, 0x09,                 # porom
+        #0xE7, 0x06,                 # rosa 1
+        #0xE7, 0x11,                 # adult rydia
+        #0xE7, 0x03,                 # child rydia
+        #0xE7, 0x09,                 # porom
         0xE3, 0x00,                 # remove all statuses
         0xDE, 0xFE,                 # restore HP
         0xDF, 0xFE,                 # restore MP
@@ -1562,10 +1684,8 @@ def setup_opening_event(mapid=0, x=16, y=30):
         ]
     e = EventObject.get(0x10)
     e.overwrite_event(new_event)
-    adult_rydia = CharacterObject.get(0xE)
-    adult_rydia.copy_data(CharacterObject.get(0x2))
-    adult_rydia.sprite = 11
-    StatusLoadObject.get(0x10).load_slot = 0xE  # adult rydia has child stats
+    child_rydia = CharacterObject.get(0x2)
+    child_rydia.sprite = 11
 
 
 def setup_cave():

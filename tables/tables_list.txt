@@ -19,6 +19,8 @@ CharacterObject     character_table.txt         7a900   16
 InitialEquipObject  initial_equip_table.txt     7ab00   20
 #LevelUpObject       level_up_table.txt          7b500   20
 EventObject         event_table.txt             90000   256
+NPCSpriteObject     npc_sprite_table.txt        97000   512
+NPCVisibleObject    npc_visible_table.txt       97200   64
 EventCallObject     event_call_table.txt        97260   256
 PlacementObject     placement_table.txt         98000   384     pointdelimit 98300 2 0
 SpeechObject        event_call_table.txt        99800   512
