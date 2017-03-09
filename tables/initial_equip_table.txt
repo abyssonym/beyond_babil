@@ -2,6 +2,6 @@ head,1
 armor,1
 wrist,1
 right,1
-unk_right,1
+right_qty,1
 left,1
-unk_left,1
+left_qty,1

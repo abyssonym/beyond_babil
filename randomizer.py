@@ -1,7 +1,7 @@
 from randomtools.tablereader import TableObject, get_global_label, tblpath
 from randomtools.utils import (
     classproperty, mutate_normal, shuffle_bits, get_snes_palette_transformer,
-    utilrandom as random)
+    write_multi, utilrandom as random)
 from randomtools.interface import (
     get_outfile, get_seed, get_flags, run_interface, rewrite_snes_meta,
     clean_and_write, finish_interface)
@@ -427,7 +427,7 @@ def generate_cave_layout(segment_lengths=None):
     if segment_lengths is None:
         #segment_lengths = [10, 15, 15, 15, 15, 15, 15]
         segment_lengths = [10] + ([11] * 7) + [12]
-        segment_lengths = [3, 3]
+        segment_lengths = [3, 3, 3]
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
@@ -747,6 +747,8 @@ def generate_cave_layout(segment_lengths=None):
         y = 8 + i
         create_recruitment_npc(c, x, y)
 
+    cluster_groups[0].home = lunar_whale.index, 7, 10
+
     ZEMUS_FLAME = 66
     placement_index = unused_placement_indexes.pop()
     zemus.npc_placement_index = placement_index
@@ -792,6 +794,16 @@ def generate_cave_layout(segment_lengths=None):
     p.misc |= 0xC0
     assert p.facing == 2
 
+    summons = range(54, 64)
+    random.shuffle(summons)
+    tellah_initial_spells = [i.spell for i in InitialSpellObject.getgroup(5) +
+                             InitialSpellObject.getgroup(6)]
+    tellah_learn_spells = [i for i in xrange(1, 0x31)
+                           if i not in tellah_initial_spells]
+    learn_increment = len(tellah_learn_spells) / float(len(cluster_groups)-1)
+    if learn_increment > int(learn_increment):
+        learn_increment = int(learn_increment)+1
+
     LUNG_SONG = 2  # long way to go
     lungs = []
     for aa, bb in zip(cluster_groups, cluster_groups[1:]):
@@ -835,18 +847,33 @@ def generate_cave_layout(segment_lengths=None):
             0xEC, formation,
             0xF2, flag,
             0xFA, LUNG_SONG,
-            0xFF,
+            #0xFF,
             ]
+        yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF, 0xFF]
+
+        summon = summons.pop()
+        boss_event += [0xE2, 0x04, summon]
+        if learn_increment >= len(tellah_learn_spells):
+            to_learn = list(tellah_learn_spells)
+        else:
+            to_learn = random.sample(tellah_learn_spells, learn_increment)
+        for spell in to_learn:
+            if spell >= 0x19:
+                boss_event += [0xE2, 0x06, spell]
+            else:
+                boss_event += [0xE2, 0x05, spell]
+            tellah_learn_spells.remove(spell)
+        boss_event += [0xFF]
+
         candidate_events = [e for e in unused_events
                             if e.size >= len(boss_event)]
         boss_chosen = candidate_events.pop(0)
         unused_events.remove(boss_chosen)
-        boss_chosen.overwrite_event(boss_event)
-        yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF]
         candidate_events = [e for e in unused_events
                             if e.size >= len(yesno_boss_event)]
         yesno_boss_chosen = candidate_events.pop(0)
         unused_events.remove(yesno_boss_chosen)
+        boss_chosen.overwrite_event(boss_event)
         yesno_boss_chosen.overwrite_event(yesno_boss_event)
         cases = [([(flag, False)], boss_chosen.index),
                  ([], yesno_boss_chosen.index)]
@@ -1030,6 +1057,35 @@ class ItemNameObject(NameObject): pass
 class CommandNameObject(NameObject): pass
 class CharacterObject(TableObject): pass
 class InitialEquipObject(TableObject): pass
+class LearnedSpellObject(TableObject): pass
+
+
+class InitialSpellObject(TableObject):
+    @classproperty
+    def every(self):
+        if not hasattr(InitialSpellObject, "extras"):
+            InitialSpellObject.extras = []
+        return super(InitialSpellObject, self).every + InitialSpellObject.extras
+
+    @staticmethod
+    def add_spell(spell, groupindex):
+        for i in InitialSpellObject.getgroup(groupindex):
+            if i.spell == spell:
+                return
+        index = len(InitialSpellObject.every) + len(InitialSpellObject.extras)
+        i = InitialSpellObject(index=index)
+        i.groupindex = groupindex
+        i.spell = spell
+        InitialSpellObject.extras.append(i)
+
+    @classmethod
+    def groupsort(cls, objs):
+        assert len(set([o.spell for o in objs])) == len(objs)
+        try:
+            assert len(objs) < 24
+        except AssertionError:
+            raise Exception("Spellset %s overload." % objs[0].groupindex)
+        return sorted(objs, key=lambda o: (o.spell, o.index))
 
 
 class EventObject(TableObject):
@@ -1320,12 +1376,7 @@ class SpeechObject(EventCallObject):
 
 class CommandObject(TableObject): pass
 class MenuCommandObject(TableObject): pass
-
-
-class TileObject(TableObject):
-    @property
-    def walkable(self):
-        return (self.get_bit("layer_1") or self.get_bit("layer_2")) and not self.get_bit("bridge_layer")
+class TileObject(TableObject): pass
 
 
 class TriggerObject(TableObject):
@@ -1713,26 +1764,25 @@ class MapGrid2Object(MapGridObject):
 
 
 def setup_opening_event(mapid=0, x=16, y=30):
+    characters = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    chosen = random.choice(characters)
     new_event = [
-        0xFA, 0x2c,                 # play opening song
+        #0xFA, 0x2c,                 # play opening song
+        0xFA, 0x0E,                 # play lunar whale theme
         #0xDA,                       # toggle screen fade
         #0xE9, 0x1c,                 # pause 28 cycles
         #0xFD, 0x00,                 # visual effect
         0xE8, 0x01,                 # remove DK cecil
-        0xE7, 0x0b,                 # paladin cecil
-        #0xE7, 0x02,                 # kain 1
-        #0xE7, 0x01,                 # DK cecil
-        #0xE7, 0x12,                 # edge
-        #0xE7, 0x06,                 # rosa 1
-        #0xE7, 0x11,                 # adult rydia
-        #0xE7, 0x03,                 # child rydia
-        #0xE7, 0x09,                 # porom
+        #0xE7, 0x0b,                 # paladin cecil
+        0xE7, chosen,               # random starting character
         0xE3, 0x00,                 # remove all statuses
         0xDE, 0xFE,                 # restore HP
         0xDF, 0xFE,                 # restore MP
         0xFE, mapid, x, y, 0x00,    # load map 0 16,30
+        0xC6,
         #0xDA,                       # toggle screen fade
         #0xE9, 0x18,                 # pause 24 cycles
+        #0xD7,
         0xFF,
         ]
     e = EventObject.get(0x10)
@@ -1745,9 +1795,14 @@ def setup_cave():
     # starting spells - 7c8c0
     # learning spells - 7c700
     # 9f338 - staff roll (japanese)
-    # a6e00 - random numbers
-    # 9b2c - default window palette (2 bytes)
-    #       maybe use $0C00 for dark blue or $1022 for purple
+    f = open(get_outfile(), "r+b")
+    f.seek(0x9b2c)
+    write_multi(f, 0xc00, length=2)  # game window palette
+    rng = range(0x100)
+    random.shuffle(rng)
+    f.seek(0xa6e00)
+    f.write("".join(map(chr, rng)))  # new rng table
+    f.close()
     npc_whitelist = set([])
     npcwpath = path.join(tblpath, "npc_whitelist.txt")
     for line in open(npcwpath).readlines():
@@ -1800,9 +1855,27 @@ def setup_cave():
         m.set_bit("warpable", False)
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
+
+    for i in InitialEquipObject.every:
+        for attr, _, _ in InitialEquipObject.specsattrs:
+            setattr(i, attr, 0)
+
+    CommandObject.get(2).commands = CommandObject.get(0x10).commands
+    event_spells = [
+        (0x1d, 3), (0x1e, 3), (0x21, 3), (0x24, 3),
+        (0x16, 7), (0x42, 0xc), (0x43, 0xc), (0x44, 0xc),
+        ]
+    for spell, groupindex in event_spells:
+        InitialSpellObject.add_spell(spell, groupindex)
+
+    for i in InitialSpellObject.getgroup(10):
+        i.groupindex = -1
+    for i in InitialSpellObject.getgroup(11):
+        i.groupindex = -1
+
     cluster_groups, lungs = generate_cave_layout()
-    start = cluster_groups[0].start[0]
-    setup_opening_event(mapid=start.mapid, x=start.x, y=start.y)
+    mapid, x, y = cluster_groups[0].home
+    setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
 
 

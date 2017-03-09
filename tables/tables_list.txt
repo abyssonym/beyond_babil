@@ -18,6 +18,8 @@ CommandNameObject   command_name_table.txt      7a7c6   26
 CharacterObject     character_table.txt         7a900   16
 InitialEquipObject  initial_equip_table.txt     7ab00   20
 #LevelUpObject       level_up_table.txt          7b500   20
+LearnedSpellObject  learned_spell_table.txt     7c700   13      delimit 255
+InitialSpellObject  initial_spell_table.txt     7c8c0   13      delimit 255
 EventObject         event_table.txt             90000   256
 NPCSpriteObject     npc_sprite_table.txt        97000   512
 NPCVisibleObject    npc_visible_table.txt       97200   64
