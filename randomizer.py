@@ -465,7 +465,7 @@ def generate_cave_layout(segment_lengths=None):
     lunar_whale.overwrite_map_data(lunar_whale_map)
     zemus = MapGridObject.superget(ZEMUS_INDEX)
     zemus_map = zemus.map
-    zemus_map[15][15] = 0x45
+    zemus_map[15][15] = 0x7F
     zemus.overwrite_map_data(zemus_map)
     special_maps = [LUNAR_WHALE_INDEX, ZEMUS_INDEX]
     while len(chosen) < sum(segment_lengths):
@@ -622,6 +622,9 @@ def generate_cave_layout(segment_lengths=None):
     zemus = MapObject.reverse_grid_index_canonical(replace_dict[ZEMUS_INDEX])
     zemus.background = zemus.index
     zemus.bg_properties = 0x86
+    zemus.name_index = 101
+    zemus.music = 17
+    zemus.set_battle_bg(16)
 
     used_maps = set([MapObject.reverse_grid_index_canonical(m)
                      for m in active_maps])
@@ -744,6 +747,51 @@ def generate_cave_layout(segment_lengths=None):
         y = 8 + i
         create_recruitment_npc(c, x, y)
 
+    ZEMUS_FLAME = 66
+    placement_index = unused_placement_indexes.pop()
+    zemus.npc_placement_index = placement_index
+    for p in zemus.npc_placements:
+        p.groupindex = -1
+
+    formation = 0
+    event = [
+        0xD8,
+        0xEC, formation,
+        0xE9, 0x02,
+        0x08,
+        0xFB, 0x55,
+        0xE9, 0x04,
+        0xFA, 0x03,
+        0xE9, 0x20,
+        0xDA,
+        0xFA, 0x37,
+        0xFD, 0x39,
+        0xFF,
+        ]
+    candidate_events = [e for e in unused_events
+                        if e.size >= len(event)]
+    chosen = candidate_events.pop(0)
+    unused_events.remove(chosen)
+    chosen.overwrite_event(event)
+    cases = [([], chosen.index)]
+    size = len(SpeechObject.cases_to_bytecode(cases))
+    candidate_speeches = [e for e in unused_speeches
+                          if e.size >= size
+                          and e.index < 0x100]
+    speech = candidate_speeches.pop(0)
+    speech.overwrite_event_call(cases)
+    unused_speeches.remove(speech)
+    NPCSpriteObject.get(speech.index).sprite = ZEMUS_FLAME
+    NPCVisibleObject.set_visible(speech.index)
+    p = PlacementObject.create_npc_placement(
+        speech.index, zemus.npc_placement_index, 15, 8)
+    p.set_bit("marches", True)
+    p.set_bit("turns", False)
+    p.set_bit("walks", False)
+    p.set_bit("intangible", False)
+    p.misc |= 0xC0
+    assert p.facing == 2
+
     LUNG_SONG = 2  # long way to go
     lungs = []
     for aa, bb in zip(cluster_groups, cluster_groups[1:]):
@@ -754,6 +802,7 @@ def generate_cave_layout(segment_lengths=None):
         lung.npc_placement_index = PlacementObject.canonical_zero
         lung.name_index = 101
         lung.music = LUNG_SONG
+        lung.set_battle_bg(random.randint(0, 15))
 
         ax = sum([a.xx for a in aa]) / len(aa)
         ay = sum([a.yy for a in aa]) / len(aa)
@@ -1543,6 +1592,10 @@ class MapObject(TableObject):
         for x, y in self.warps:
             summary.add((x, y))
         return summary
+
+    def set_battle_bg(self, value):
+        self.properties_battlebackground = (
+            (self.properties_battlebackground & 0xF0) | value)
 
     def neutralize(self):
         self.grid_index = 0xFF
