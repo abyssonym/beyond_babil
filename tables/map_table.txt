@@ -1,4 +1,4 @@
-properties_battlebackground,bit:bbg1 bbg2 bbg3 bbg4 warpable exitable u06 magnetic
+properties_battlebackground,bit:bbg1 bbg2 bbg3 bbg4 warpable exitable alternate_palette magnetic
 grid_index,1
 tileset_index,1
 npc_placement_index,1

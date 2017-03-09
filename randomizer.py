@@ -624,7 +624,7 @@ def generate_cave_layout(segment_lengths=None):
     zemus.bg_properties = 0x86
     zemus.name_index = 101
     zemus.music = 17
-    zemus.set_battle_bg(16)
+    zemus.set_battle_bg(0)
 
     used_maps = set([MapObject.reverse_grid_index_canonical(m)
                      for m in active_maps])
@@ -756,6 +756,10 @@ def generate_cave_layout(segment_lengths=None):
         p.groupindex = -1
 
     formation = 0
+    f = open(get_outfile(), 'r+b')
+    f.seek(0x73D)
+    write_multi(f, formation, length=2)
+    f.close()
     event = [
         0xD8,
         0xEC, formation,
@@ -1764,8 +1768,7 @@ class MapGrid2Object(MapGridObject):
 
 
 def setup_opening_event(mapid=0, x=16, y=30):
-    characters = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-    chosen = random.choice(characters)
+    chosen = random.randint(1, 12)
     new_event = [
         #0xFA, 0x2c,                 # play opening song
         0xFA, 0x0E,                 # play lunar whale theme
