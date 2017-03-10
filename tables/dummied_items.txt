@@ -1,0 +1,48 @@
+b0| Bomb
+b1| Big Bomb
+b2| Notus
+b3| Boreas
+b4| ThorRage
+b5| ZeusRage
+b6| Stardust
+b7| Succubus
+b8| Vampire
+b9| Bacchus
+ba| Hermes
+bb| HrGlass1
+bc| HrGlass2
+bd| HrGlass3
+be| Silk Web
+bf| Illusion
+c0| Inferno
+c1| Blizzard
+c2| LitStorm
+c3| StarVeil
+c4| Kamikaze
+c5| MoonVeil
+c6| MuteBell
+c7| GaiaDrum
+c9| Coffin
+ca| Grimore
+cb| Bestiary
+cc| Alarm
+cd| Unihorn
+d5|$7a|Soft
+d6|$7a|MaidKiss
+d7|$7a|Mallet
+d8|$7a|DietFood
+d9|$7a|EchoNote
+da|$7a|Eyedrops
+db|$7a|Antidote
+dc|$7a|Cross
+de| Alert
+df| Au Apple
+e0| Ag Apple
+e1| SomaDrop
+e4| Smut
+e5| Exit
+e6| EagleEye
+e9|$41|Cocatris
+fb| DkMatter
+fc| Dummy
+fd| Dummy

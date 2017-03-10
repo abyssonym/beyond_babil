@@ -16,6 +16,25 @@ VERSION = 1
 ALL_OBJECTS = None
 LOCATION_NAMES = []
 
+textdict = {}
+reverse_textdict = {}
+for line in open(path.join(tblpath, "font.txt")):
+    character, byte = line.split("|")
+    byte = chr(int(byte, 0x10))
+    textdict[byte] = character
+    reverse_textdict[character] = byte
+assert ' ' in reverse_textdict
+
+
+def bytestr_to_text(bytestr):
+    text = "".join([textdict[c] if c in textdict else '~' for c in bytestr])
+    return text
+
+
+def text_to_bytestr(text):
+    bytestr = "".join([reverse_textdict[c] for c in text])
+    return bytestr
+
 
 def get_location_names():
     if LOCATION_NAMES:
@@ -988,7 +1007,21 @@ class NameObject(TableObject):
                 s += " "
             else:
                 s += "?"
-        return s.strip()
+        return s.rstrip(' ')
+
+    def rename(self, name):
+        s = ""
+        if isinstance(name, basestring):
+            name = [name]
+        for n in name:
+            if n and n[0] == '$':
+                s += chr(int(n[1:], 0x10))
+            else:
+                s += text_to_bytestr(n)
+        self.text = map(ord, s)
+        while len(self.text) < self.total_size:
+            self.text += [ord(text_to_bytestr(' '))]
+        assert len(self.text) == self.total_size
 
 
 class MonsterNameObject(NameObject): pass
@@ -1058,10 +1091,41 @@ class MonsterObject(TableObject):
 class EncounterObject(TableObject): pass
 class PackObject(TableObject): pass
 class ItemNameObject(NameObject): pass
+class SpellNameObject(NameObject): pass
+class LongSpellNameObject(NameObject): pass
 class CommandNameObject(NameObject): pass
 class CharacterObject(TableObject): pass
 class InitialEquipObject(TableObject): pass
-class LearnedSpellObject(TableObject): pass
+
+
+class LearnedSpellObject(TableObject):
+    @classproperty
+    def every(self):
+        if not hasattr(LearnedSpellObject, "extras"):
+            LearnedSpellObject.extras = []
+        return (super(LearnedSpellObject, self).every +
+                LearnedSpellObject.extras)
+
+    @staticmethod
+    def add_spell(spell, level, groupindex):
+        for i in LearnedSpellObject.getgroup(groupindex):
+            if i.spell == spell:
+                return
+        index = len(LearnedSpellObject.every)
+        i = LearnedSpellObject(index=index)
+        i.groupindex = groupindex
+        i.spell = spell
+        i.level = level
+        LearnedSpellObject.extras.append(i)
+
+    @classmethod
+    def groupsort(cls, objs):
+        assert len(set([o.spell for o in objs])) == len(objs)
+        try:
+            assert len(objs) < 24
+        except AssertionError:
+            raise Exception("Learnset %s overload." % objs[0].groupindex)
+        return sorted(objs, key=lambda o: (o.level, o.spell, o.index))
 
 
 class InitialSpellObject(TableObject):
@@ -1076,7 +1140,7 @@ class InitialSpellObject(TableObject):
         for i in InitialSpellObject.getgroup(groupindex):
             if i.spell == spell:
                 return
-        index = len(InitialSpellObject.every) + len(InitialSpellObject.extras)
+        index = len(InitialSpellObject.every)
         i = InitialSpellObject(index=index)
         i.groupindex = groupindex
         i.spell = spell
@@ -1882,6 +1946,47 @@ def setup_cave():
     write_location_names()
 
 
+def undummy():
+    for line in open(path.join(tblpath, "dummied_items.txt")):
+        line = line.strip('\n')
+        args = line.split("|")
+        index = int(args[0], 0x10)
+        name = args[1:]
+        i = ItemNameObject.get(index)
+        i.rename(name)
+
+    for line in open(path.join(tblpath, "dummied_commands.txt")):
+        line = line.strip('\n')
+        index, name, job, position = line.split()
+        try:
+            index, job, position = (
+                int(index, 0x10), int(job, 0x10), int(position))
+        except ValueError:
+            continue
+        name = name.split('|')
+        c = CommandNameObject.get(index)
+        c.rename(name)
+        c = CommandObject.get(job)
+        c.commands.insert(position, index)
+        c.commands = c.commands[:5]
+
+    for line in open(path.join(tblpath, "dummied_spells.txt")):
+        line = line.strip('\n')
+        args = line.split("|")
+        index = int(args[0], 0x10)
+        name = args[1:]
+        try:
+            s = SpellNameObject.get(index)
+        except KeyError:
+            s = LongSpellNameObject.get(index-len(SpellNameObject.every))
+        s.rename(name)
+
+    rosa_learn = [(5, 12), (6, 27), (0xc, 31)]
+    rosa_spellset = 7
+    for spell, level in rosa_learn:
+        LearnedSpellObject.add_spell(spell, level, rosa_spellset)
+
+
 if __name__ == "__main__":
     try:
         print ('You are using the FF4 '
@@ -1920,6 +2025,7 @@ if __name__ == "__main__":
         print [f for f in xrange(0x100) if f not in flags]
         '''
         #print EventObject.get(0x10).pretty_script
+        undummy()
         setup_cave()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)

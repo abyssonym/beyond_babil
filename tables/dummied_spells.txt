@@ -1,0 +1,5 @@
+4|$40|Armor
+5|$40|Shell
+b|$40|Dspel
+32|$41|Cocat
+4e|Cocatris
