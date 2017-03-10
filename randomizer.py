@@ -443,10 +443,11 @@ class ClusterGroup:
 
 def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
+    ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
     if segment_lengths is None:
         #segment_lengths = [10, 15, 15, 15, 15, 15, 15]
         segment_lengths = [10] + ([11] * 7) + [12]
-        segment_lengths = [3, 3, 3]
+        segment_lengths = [100]
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
@@ -460,6 +461,17 @@ def generate_cave_layout(segment_lengths=None):
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
                         if line.strip()])
+
+    PALETTE_BANNED = [(13,  0),]
+    palette_options = defaultdict(set)
+    for m in MapObject.every:
+        if m.grid_index in banned_grids:
+            continue
+        if (m.battle_bg, m.map_palette) in PALETTE_BANNED:
+            continue
+        palette_options[(m.tileset_index, m.battle_bg)].add(
+            (m.map_palette, m.get_bit("alternate_palette")))
+
     giant_lung = MapObject.reverse_grid_index_canonical(LUNG_INDEX)
     banned_grids.add(giant_lung.grid_index)
     banned_grids.add(giant_lung.background)
@@ -607,6 +619,13 @@ def generate_cave_layout(segment_lengths=None):
         for t in triggers:
             if t.is_exit:
                 t.groupindex = -1
+
+        m = MapObject.get(mapid)
+        options = sorted(palette_options[(m.tileset_index, m.battle_bg)])
+        if options and len(options) > 1:
+            palette, truth = random.choice(options)
+            m.map_palette = palette
+            m.set_bit("alternate_palette", truth)
 
     for m in MapObject.every:
         m.name_index = 0
@@ -823,9 +842,13 @@ def generate_cave_layout(segment_lengths=None):
                              InitialSpellObject.getgroup(6)]
     tellah_learn_spells = [i for i in xrange(1, 0x31)
                            if i not in tellah_initial_spells]
-    learn_increment = len(tellah_learn_spells) / float(len(cluster_groups)-1)
-    if learn_increment > int(learn_increment):
-        learn_increment = int(learn_increment)+1
+    try:
+        learn_increment = (len(tellah_learn_spells) /
+                           float(len(cluster_groups)-1))
+        if learn_increment > int(learn_increment):
+            learn_increment = int(learn_increment)+1
+    except ZeroDivisionError:
+        learn_increment = 999
 
     LUNG_SONG = 2  # long way to go
     lungs = []
@@ -1712,6 +1735,10 @@ class MapObject(TableObject):
             summary.add((x, y))
         return summary
 
+    @property
+    def battle_bg(self):
+        return self.properties_battlebackground & 0xF
+
     def set_battle_bg(self, value):
         self.properties_battlebackground = (
             (self.properties_battlebackground & 0xF0) | value)
@@ -1859,8 +1886,6 @@ def setup_opening_event(mapid=0, x=16, y=30):
 
 
 def setup_cave():
-    # starting spells - 7c8c0
-    # learning spells - 7c700
     # 9f338 - staff roll (japanese)
     f = open(get_outfile(), "r+b")
     f.seek(0x9b2c)
