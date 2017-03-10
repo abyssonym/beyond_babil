@@ -1858,27 +1858,30 @@ class MapGrid2Object(MapGridObject):
     BASE_POINTER = 0xc0000
 
 
-def setup_opening_event(mapid=0, x=16, y=30):
+def setup_opening_event(mapid=0, x=16, y=30, running=True):
     chosen = random.randint(1, 12)
     new_event = [
-        #0xFA, 0x2c,                 # play opening song
         0xFA, 0x0E,                 # play lunar whale theme
-        #0xDA,                       # toggle screen fade
-        #0xE9, 0x1c,                 # pause 28 cycles
-        #0xFD, 0x00,                 # visual effect
         0xE8, 0x01,                 # remove DK cecil
-        #0xE7, 0x0b,                 # paladin cecil
         0xE7, chosen,               # random starting character
         0xE3, 0x00,                 # remove all statuses
         0xDE, 0xFE,                 # restore HP
         0xDF, 0xFE,                 # restore MP
         0xFE, mapid, x, y, 0x00,    # load map 0 16,30
         0xC6,
-        #0xDA,                       # toggle screen fade
-        #0xE9, 0x18,                 # pause 24 cycles
-        #0xD7,
         0xFF,
         ]
+    if running:
+        # 1 is fast enough for anybody
+        # 4 is fast enough to clip through walls
+        # anything above 0 will break cutscenes with walking
+        fast_level = 1
+        f = open(get_outfile(), 'r+b')
+        f.seek(0x19b9)
+        f.write("".join(map(chr, [0xA9, fast_level])))
+        f.seek(0x2668)
+        f.write("".join(map(chr, [0xA9, fast_level])))
+        f.close()
     e = EventObject.get(0x10)
     e.overwrite_event(new_event)
     child_rydia = CharacterObject.get(0x2)
