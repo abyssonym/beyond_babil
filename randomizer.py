@@ -940,6 +940,18 @@ class StatusLoadObject(TableObject): pass
 class StatusSaveObject(TableObject): pass
 
 
+class AIFixObject(TableObject):
+    @staticmethod
+    def set_formation_ai(index, truth):
+        index, bit = index / 8, index % 8
+        bit = 1 << bit
+        a = AIFixObject.get(index)
+        if truth:
+            a.formation_flags |= bit
+        elif a.formation_flags & bit:
+            a.formation_flags ^= bit
+
+
 class FormationObject(TableObject):
     def __repr__(self):
         names = []
@@ -1116,6 +1128,43 @@ class PackObject(TableObject): pass
 class ItemNameObject(NameObject): pass
 class SpellNameObject(NameObject): pass
 class LongSpellNameObject(NameObject): pass
+
+
+class PriceObject(TableObject):
+    @property
+    def name(self):
+        return ItemNameObject.get(self.index).name
+
+    @property
+    def price(self):
+        if self.price_byte & 0x80:
+            return (self.price_byte & 0x7F) * 1000
+        return self.price_byte * 10
+
+    @property
+    def banned(self):
+        return self.index in [0, 96] + range(0xFC, 0x100)
+
+    @property
+    def buyable(self):
+        for s in ShopObject.every:
+            if self.index < 0xFF and self.index in s.items:
+                return True
+        return False
+
+    @property
+    def sellable(self):
+        return self.price != 0
+
+    @property
+    def rank(self):
+        if self.banned:
+            return -1
+        if self.buyable:
+            return self.price
+        return 1000000
+
+
 class CommandNameObject(NameObject): pass
 class CharacterObject(TableObject): pass
 class InitialEquipObject(TableObject): pass
@@ -1465,6 +1514,7 @@ class SpeechObject(EventCallObject):
     BASE_POINTER = 0x99c00
 
 
+class ShopObject(TableObject): pass
 class CommandObject(TableObject): pass
 class MenuCommandObject(TableObject): pass
 class TileObject(TableObject): pass
@@ -2014,6 +2064,57 @@ def undummy():
         LearnedSpellObject.add_spell(spell, level, rosa_spellset)
 
 
+def lunar_ai_fix(filename=None):
+    if filename is None:
+        filename = get_outfile()
+    FORMATION_FLAGS_ADDR = 0x1FFC0
+    FUNCTION_ADDR = 0x1FEE3
+    CALL_ADDR_1 = 0x192A1
+    CALL_ADDR_2 = 0x193FA
+
+    call_asm = [
+        0x20, FUNCTION_ADDR & 0xFF, (FUNCTION_ADDR >> 8) & 0xFF,
+        0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA,
+        ]
+    f = open(filename, "r+b")
+    f.seek(CALL_ADDR_1)
+    f.write("".join(map(chr, call_asm)))
+    f.seek(CALL_ADDR_2)
+    f.write("".join(map(chr, call_asm)))
+
+    function_asm = [
+        0xDA,                   # PHX
+        0xAD, 0x00, 0x18,       # LDA $1800
+        0xAA,                   # TAX
+        0x29, 0x07,             # AND #$07
+        0xA8,                   # TAY
+        0x8A,                   # TXA
+        0x4A,                   # LSR A
+        0x4A,                   # LSR A
+        0x4A,                   # LSR A
+        0xAA,                   # TAX
+        0xA9, 0x00,             # LDA #$00
+        0xC8,                   # INY
+        0x38,                   # SEC
+        0x2A,                   # ROL A
+        0x88,                   # DEY
+        0xD0, 0xFC,             # BNE -2
+        # BIT $FFC0,X
+        #0x3C, FORMATION_FLAGS_ADDR & 0xFF, (FORMATION_FLAGS_ADDR >> 8) & 0xFF,
+        # AND $03FFC0,X
+        0x3F, FORMATION_FLAGS_ADDR & 0xFF, (FORMATION_FLAGS_ADDR >> 8) & 0xFF, (FORMATION_FLAGS_ADDR >> 16) | 0x02,
+        0xD0, 0x05,             # BNE +5
+        0xA0, 0x00, 0xE9,       # LDY #$E900
+        0x80, 0x03,             # BRA +3
+        0xA0, 0xC0, 0xB6,       # LDY #$B6C0
+        0xFA,                   # PLX
+        0x60,                   # RTS
+        ]
+    f.seek(FUNCTION_ADDR)
+    f.write("".join(map(chr, function_asm)))
+    f.close()
+
+
 if __name__ == "__main__":
     try:
         print ('You are using the FF4 '
@@ -2053,6 +2154,7 @@ if __name__ == "__main__":
         '''
         #print EventObject.get(0x10).pretty_script
         undummy()
+        lunar_ai_fix()
         setup_cave()
         clean_and_write(ALL_OBJECTS)
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
