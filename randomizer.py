@@ -1858,7 +1858,7 @@ class MapGrid2Object(MapGridObject):
     BASE_POINTER = 0xc0000
 
 
-def setup_opening_event(mapid=0, x=16, y=30, running=True):
+def setup_opening_event(mapid=0, x=16, y=30, running=False):
     chosen = random.randint(1, 12)
     new_event = [
         0xFA, 0x0E,                 # play lunar whale theme
@@ -1872,9 +1872,8 @@ def setup_opening_event(mapid=0, x=16, y=30, running=True):
         0xFF,
         ]
     if running:
-        # 1 is fast enough for anybody
-        # 4 is fast enough to clip through walls
         # anything above 0 will break cutscenes with walking
+        # 3aa disables dash on map load
         fast_level = 1
         f = open(get_outfile(), 'r+b')
         f.seek(0x19b9)
