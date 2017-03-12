@@ -8,8 +8,8 @@ MonsterDropObject   monster_drop_table.txt      71f00   64
 MonsterGilObject    monster_gil_table.txt       72000   224
 MonsterXPObject     monster_xp_table.txt        721c0   224
 MonsterObject       monster_table.txt           726a0   224     point1  68000 2
-EncounterObject     encounter_table.txt         74542   468
-#OverworldPackObject pack_table.txt              74796   16
+OverworldEncObject  encounter_table.txt         74542   84
+EncounterObject     encounter_table.txt         74596   384
 PackObject          pack_table.txt              74816   80
 #AIGroupObject       ai_group_table.txt          76030   254     delimit 255
 # ai scripts        76900   256

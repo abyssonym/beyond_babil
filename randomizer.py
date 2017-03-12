@@ -966,6 +966,17 @@ class FormationObject(TableObject):
         return "%x %s %s %s" % (self.index, self.rank, self.prerank, ", ".join(names))
 
     @property
+    def is_lunar_ai_formation(self):
+        for m in MapObject.every:
+            if m.is_lunar_ai_map:
+                if EncounterObject.get(m.index).encounter == 0:
+                    if self in m.event_battles:
+                        return True
+                elif self in m.all_formations:
+                    return True
+        return False
+
+    @property
     def monsters(self):
         monsters = []
         for i, t in enumerate(self.monster_types):
@@ -978,53 +989,124 @@ class FormationObject(TableObject):
         return monsters
 
     @property
-    def prerank(self):
-        if hasattr(self, "_prerank"):
-            return self._prerank
-        rank = 0
-        monsters = sorted(self.monsters, key=lambda m: m.rank, reverse=True)
-        assert monsters[0].rank >= monsters[-1].rank
-        for i, m in enumerate(monsters):
-            rank += (m.rank * (0.5 ** i))
-        if self.get_bit("back_attack"):
-            rank *= (1 + (0.1 * len(monsters)))
-        #if self.get_bit("no_flee"):
-        #    rank *= 1.5
-        if self.get_bit("egg1") or self.get_bit("egg2") or self.get_bit("egg3"):
-            rank *= 0.5
-        if self.get_bit("no_gameover"):
-            rank = 0
-        if self.get_bit("character_battle") or self.get_bit("auto_battle"):
-            rank = -1
-        self._prerank = rank
-        return self.prerank
-
-    @property
     def is_boss(self):
         return self.get_bit("no_flee") and self.battle_music != 0
 
     @property
-    def rank(self):
-        return self.prerank
+    def sum_rank(self):
+        return sum(m.rank for m in self.monsters)
 
+    @property
+    def weighted_xp_rank(self):
+        rank = 0
+        monsters = sorted(self.monsters,
+                          key=lambda m: m.rank, reverse=True)
+        assert monsters[0].rank >= monsters[-1].rank
+        for i, m in enumerate(monsters):
+            rank += (m.rank * (0.5 ** i))
+        return rank
+
+    @property
+    def map_rank(self):
+        if self.index == 0xe5:
+            maps = [MapObject.get(0x2c)]
+        else:
+            maps = [m for m in MapObject.every if self in m.all_formations]
+        if not maps:
+            return -1
+        if len(maps) == 1:
+            m = maps[0]
+            m2s = set([
+                m4 for m2 in m.connected_maps
+                for m3 in m2.connected_maps
+                for m4 in m3.connected_maps] + [m])
+            if m.index != 0x6C:
+                m2s = [m for m in m2s
+                       if EncounterObject.get(m.index).encounter != 0]
+            formations = [f for m2 in m2s for f in m2.formations]
+            if formations:
+                return max(f._rank for f in formations) + 1
+            return None
+        return None
+
+    @property
+    def rank(self):
         if hasattr(self, "_rank"):
             return self._rank
-        if not hasattr(self, "_prerank"):
-            [f.prerank for f in FormationObject.every]
-        is_boss = lambda f: f.get_bit("boss_death") and f.get_bit("no_flee")
-        boss_status = is_boss(self)
-        imp_x1 = FormationObject.get(0x1FF)
-        like_formations = [f for f in FormationObject.every if f.prerank > imp_x1.prerank and is_boss(f) == boss_status]
-        if self not in like_formations:
-            self._rank = -1
-            return self.rank
-        index = sorted(like_formations, key=lambda f: f.prerank).index(self)
-        self._rank = int(round(index * 1000 / float(len(like_formations))))
+        f = open(path.join(tblpath, "formation_ranks.txt"))
+        for line in f:
+            rank, index, etc = line.split(" ", 2)
+            rank = int(rank)
+            index = int(index, 0x10)
+            fo = FormationObject.get(index)
+            assert not hasattr(fo, "_rank")
+            fo._rank = rank
+        f.close()
+        for f in FormationObject.every:
+            if not hasattr(f, "_rank"):
+                f._rank = -1
         return self.rank
 
     @property
     def battle_music(self):
         return (self.misc2 >> 2) & 0b11
+
+    @property
+    def scenario(self):
+        return (self.get_bit("no_gameover") or
+                self.get_bit("character_battle") or
+                self.get_bit("auto_battle"))
+
+    @staticmethod
+    def rank_properly():
+        for f in FormationObject.every:
+            if not f.get_bit("no_flee"):
+                f._rank = f.weighted_xp_rank
+            elif f.weighted_xp_rank == 0 or f.scenario:
+                f._rank = -1
+
+        for f in FormationObject.every:
+            if hasattr(f, "_rank"):
+                continue
+            monsters = set(f.monsters)
+            for f2 in FormationObject.every:
+                if not hasattr(f2, "_rank") or f2.rank <= 0:
+                    continue
+                if (f.weighted_xp_rank == f2.weighted_xp_rank
+                        and monsters == set(f2.monsters)):
+                    f._rank = f2._rank
+
+        for f in FormationObject.every:
+            if hasattr(f, "_rank"):
+                continue
+            monsters = set(f.monsters)
+            f2s = [f2 for f2 in FormationObject.every
+                   if hasattr(f2, "_rank") and f2.rank > 0
+                   and set(f2.monsters) & monsters]
+            f2s = sorted(f2s, key=lambda f2: abs(
+                f2.weighted_xp_rank - f.weighted_xp_rank))
+            if f2s:
+                f2 = f2s[0]
+                f._rank = f2._rank
+                w1, w2 = f.weighted_xp_rank, f2.weighted_xp_rank
+                if w1 > w2:
+                    f._rank += 1
+                elif w2 > w1:
+                    f._rank -= 1
+
+        for f in FormationObject.every:
+            if hasattr(f, "_rank"):
+                continue
+            map_rank = f.map_rank
+            if map_rank is not None:
+                f._rank = map_rank
+
+        for f in FormationObject.every:
+            if hasattr(f, "_rank"):
+                continue
+            f._rank = f.weighted_xp_rank
+
+        return
 
 
 class NameObject(TableObject):
@@ -1095,12 +1177,9 @@ class MonsterObject(TableObject):
         value = (value - low) / float(high - low)
         return value
 
-
     @property
     def rank(self):
-        rank = (self.get_attr_rank("hp") +
-                (self.get_attr_rank("xp") * 10))
-        return rank * 1000000
+        return self.xp
 
     @property
     def xp(self):
@@ -1123,8 +1202,33 @@ class MonsterObject(TableObject):
         return self.drop_index >> 6
 
 
-class EncounterObject(TableObject): pass
-class PackObject(TableObject): pass
+class EncounterObject(TableObject):
+    def __repr__(self):
+        s = "ENCOUNTER %s %s\n" % (self.index, MapObject.get(self.index).name)
+        for f in self.formations:
+            s += str(f) + "\n"
+        return s.strip()
+
+    @property
+    def formations(self):
+        return PackObject.get(self.encounter).get_formations(
+            alternate=self.index >= 0x100)
+
+
+class PackObject(TableObject):
+    @property
+    def __repr__(self):
+        s = "PACK %x\n" % self.index
+        for f in self.get_formations():
+            s += str(f) + "\n"
+        return s.strip()
+
+    def get_formations(self, alternate=False):
+        if alternate:
+            return [FormationObject.get(f+0x100) for f in self.formation_ids]
+        return [FormationObject.get(f) for f in self.formation_ids]
+
+
 class ItemNameObject(NameObject): pass
 class SpellNameObject(NameObject): pass
 class LongSpellNameObject(NameObject): pass
@@ -1134,6 +1238,14 @@ class PriceObject(TableObject):
     @property
     def name(self):
         return ItemNameObject.get(self.index).name
+
+    @property
+    def is_equipment(self):
+        return self.index <= 175
+
+    @property
+    def is_arrows(self):
+        return 0x84 <= self.index <= 0x95
 
     @property
     def price(self):
@@ -1484,7 +1596,14 @@ class PlacementObject(TableObject):
 
     @property
     def speech(self):
-        return SpeechObject.get(self.npc_index)
+        return self.get_speech(alternate=False)
+
+    def get_speech(self, alternate=False):
+        if alternate:
+            index = self.npc_index | 0x100
+        else:
+            index = self.npc_index
+        return SpeechObject.get(index)
 
     @property
     def events(self):
@@ -1649,6 +1768,11 @@ class MapObject(TableObject):
             s += "WARP ?????\n"
         return s.strip()
 
+    @property
+    def is_lunar_ai_map(self):
+        return (0x15a <= self.index <= 0x15c or
+                0x167 <= self.index <= 0x17e)
+
     @staticmethod
     def reverse_grid_index(grid_index):
         return [m for m in MapObject.every
@@ -1758,8 +1882,56 @@ class MapObject(TableObject):
 
     @property
     def events(self):
-        return ([e for t in self.event_triggers for e in t.events] +
-                [e for p in self.npc_placements for e in p.events])
+        return ([e for t in self.event_calls for e in t.events] +
+                [e for p in self.speeches for e in p.events])
+
+    @property
+    def connected_maps(self):
+        maps = [m for m in MapObject.every
+                if self.index & 0x100 == m.index & 0x100
+                and self in m.enterable_maps]
+        return set(maps) | self.enterable_maps
+
+    @property
+    def enterable_maps(self):
+        maps = []
+        for t in self.exits:
+            index = t.new_map
+            if index >= 0xED:
+                continue
+            if self.index >= 0x100:
+                index |= 0x100
+            maps.append(MapObject.get(index))
+        return set(maps)
+
+    @property
+    def event_battles(self):
+        formations = []
+        for e in self.events:
+            for command, parameters in e.instructions:
+                if command == 0xEC:
+                    index = parameters[0]
+                    if self.index >= 0x100:
+                        index |= 0x100
+                    formations.append(FormationObject.get(index))
+        return formations
+
+    @property
+    def chest_battles(self):
+        formations = []
+        for c in self.chests:
+            if c.misc2 & 0x40:
+                f = FormationObject.get(c.formation)
+                formations.append(f)
+        return formations
+
+    @property
+    def formations(self):
+        return EncounterObject.get(self.index).formations
+
+    @property
+    def all_formations(self):
+        return self.formations + self.event_battles + self.chest_battles
 
     @property
     def event_calls(self):
@@ -1767,7 +1939,8 @@ class MapObject(TableObject):
 
     @property
     def speeches(self):
-        return [p.speech for p in self.npc_placements]
+        alternate = self.index >= 0x100
+        return [p.get_speech(alternate=alternate) for p in self.npc_placements]
 
     @property
     def npc_placements(self):
@@ -2127,32 +2300,7 @@ if __name__ == "__main__":
         hexify = lambda x: "{0:0>2}".format("%x" % x)
         numify = lambda x: "{0: >3}".format(x)
         minmax = lambda x: (min(x), max(x))
-        #for f in sorted(FormationObject.every):
-        #    if f.get_bit("no_flee") and f.battle_music in [1, 2, 3]:
-        #        print f
 
-        #for m in MonsterObject.every:
-        #    print m.name, m.level & 0x7F, m.hp, m.attack, m.defense, m.magic_defense, "%x" % m.drop_speed, m.xp, m.gil
-        #for m in MonsterObject.ranked:
-        #    print m, m.hp, m.xp, m.defense, m.magic_defense
-        #from collections import Counter
-        #used_tilesets = sorted(Counter(m.tileset_index for m in MapObject.every).items(), key=lambda (a, b): b)
-        '''
-        for f in FormationObject.every:
-            if "Zeromus" in str(f):
-                print f
-                print
-        for e in EventObject.every:
-            print e.pretty_script
-            print
-        flags = set([])
-        for p in SpeechObject.every + EventCallObject.every:
-            for conditions, call in p.cases:
-                for flag, truth in conditions:
-                    flags.add(flag)
-        print [f for f in xrange(0x100) if f not in flags]
-        '''
-        #print EventObject.get(0x10).pretty_script
         undummy()
         lunar_ai_fix()
         setup_cave()

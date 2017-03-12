@@ -1,0 +1,476 @@
+2000 082 Imp x1
+2000 083 Imp x1
+2000 084 Imp x1
+2000 085 Imp x1
+2000 086 Imp x1
+2000 087 Imp x1
+2000 0b7 Imp x1
+2000 0cb Imp x1
+2000 0cf Imp x1
+2000 0d7 Imp x1
+2000 0d8 Imp x1
+2000 0d9 Imp x1
+2000 0da Imp x1
+2000 0db Imp x1
+2000 126 Imp x1
+2000 127 Imp x1
+2000 17f Imp x1
+2000 1a0 Imp x1
+2000 1a4 Imp x1
+2000 1a5 Imp x1
+2000 1a6 Imp x1
+2000 1b8 Imp x1
+2000 1c8 Imp x1
+2000 1c9 Imp x1
+2000 1ca Imp x1
+2000 1cb Imp x1
+2000 1cc Imp x1
+2000 1cd Imp x1
+2000 1ce Imp x1
+2000 1cf Imp x1
+2000 1d0 Imp x1
+2000 1d1 Imp x1
+2000 1d2 Imp x1
+2000 1d3 Imp x1
+2000 1d4 Imp x1
+2000 1d5 Imp x1
+2000 1d6 Imp x1
+2000 1d7 Imp x1
+2000 1f5 Imp x1
+2000 1f6 Imp x1
+2000 1f7 Imp x1
+2000 1f8 Imp x1
+2000 1f9 Imp x1
+2000 1ff Imp x1
+3500 000 Imp x3
+3750 006 Imp x3, Imp x1
+3938 0d0 Imp x3, Imp x3
+3984 01c Imp x3, Imp x3, Imp x2
+5250 003 Eagle x3
+6000 001 FloatEye x2
+6250 002 FloatEye x1, Eagle x2
+8750 007 Larva x3
+8751 004 Imp x3, SwordRat x1
+9000 00b SandWorm x1
+11250 005 SwordRat x2, Imp x2
+13000 01e SandWorm x1, Sandpede x1
+13500 01f SandWorm x2
+13750 023 Basilisk x1, Imp x3
+13781 0d1 SwordRat x3, SwordRat x3
+13875 008 SandMoth x2, Larva x2
+13975 0de D?Mist x1
+14000 00a Sandpede x1, Sand Man x2
+15000 009 Sand Man x3, Sand Man x1
+15001 0ed Officer x1, Soldier x3
+15750 00e CaveToad x3
+16875 014 CaveToad x2, CaveToad x2
+20750 020 Imp x3, Imp Cap? x1
+21000 00d Pike x3
+22125 00f Pike x2, EvilShel x2
+22500 010 Zombie x3, Zombie x1
+22875 015 CaveToad x2, Mad Toad x2
+23625 018 Zombie x3, Zombie x3
+24000 027 Weeper x2
+24375 01a Mad Toad x3, Mad Toad x1
+25500 021 Turtle x1, Imp x2
+26250 012 Jelly x3, Jelly x1
+28125 022 Cream x2, Cream x2
+30000 026 Basilisk x1, Turtle x1
+32625 00c EvilShel x3, WaterBug x1
+33000 016 Aligator x1, Pike x2
+33588 0f8 Weeper x1, Imp Cap? x1, WaterHag x1
+33688 03b Imp Cap? x3, Imp x3
+35000 025 Weeper x1, Turtle x1, Basilisk x1
+35813 036 Imp Cap? x2, Imp Cap? x2, Imp x2
+36000 024 Turtle x2
+36001 017 Aligator x2
+36100 0e0 Antlion x1
+40031 011 Pike x2, EvilShel x2, WaterBug x2
+41250 019 Aligator x1, WaterBug x2
+41813 01d SwordRat x2, Imp x2, TinyMage x2
+43500 029 Spirit x2
+45000 028 Skelton x3, Skelton x1
+45563 013 TinyMage x2, WaterHag x2, WaterHag x2
+47900 0f9 Gargoyle x1
+48000 02d Gargoyle x2
+48750 01b TinyMage x3, TinyMage x1
+48850 0df Octomamm x1
+49000 02c Cocktric x3
+52500 02f Spirit x2, Skelton x2
+53000 02a Gargoyle x1, Cocktric x2
+53001 031 Red Bone x1, Skelton x3
+53625 034 Imp Cap? x3, Needler x1
+58125 03a Needler x2, SwordRat x2
+58500 03e Skelton x3, Red Bone x2
+59625 033 Spirit x3, Skelton x2, Red Bone x1
+64750 02b Bomb x3
+66281 037 SwordRat x3, Needler x3
+68906 035 Imp Cap? x3, Needler x3
+74000 038 Raven x1
+76375 03c Spirit x3, Soul x1
+81375 02e GrayBomb x2, Bomb x2
+81375 030 GrayBomb x1, Bomb x2, GrayBomb x1
+83125 04b Pike x3, Piranha x3
+84844 032 GrayBomb x2, Bomb x2, Bomb x2
+84944 0e1 MomBomb x1, Bomb x3, GrayBomb x3
+84945 0f7 General x1, Fighter x2
+86500 040 Ghoul x1, Red Bone x2, Skelton x2
+88500 03d Soul x2, Red Bone x2
+91219 041 Spirit x2, Soul x2, Red Bone x2
+91500 042 Zombie x2, Ghoul x2
+98500 039 Raven x1, Cocktric x3
+100000 0e2 Milon x1, Ghast x2, Ghast x2
+100001 0e3 Milon Z? x1
+102000 051 Hydra x2
+106125 043 Ghoul x2, Soul x2
+108000 055 Guard x2
+108000 0fa Guard x2
+110250 05e Cave Bat x3
+114750 04e Piranha x2, ElecFish x2
+118750 044 Revenant x1, Ghoul x3
+119313 048 Soul x3, Ghoul x1, Revenant x1
+119500 073 Jelly x1, Slime x2, Cream x1
+121500 04c Crocdile x1, Piranha x2
+123000 056 Guard x1, Hydra x2
+124500 05f Panther x2
+125063 045 Zombie x3, Ghoul x2, Revenant x2
+128531 047 Soul x2, Ghoul x2, Revenant x2
+130000 111 BlackLiz x1
+130000 1db BlackLiz x1
+130500 052 Crocdile x2
+132750 062 CaveNaga x1, Python x2
+137125 064 VampGirl x1, Cave Bat x3
+140875 04a Piranha x2, FangShel x1, EvilShel x1
+142125 067 CaveNaga x2, Python x2
+142500 071 Slime x2, Slime x2
+143875 04f Crocdile x1, ElecFish x3
+144016 06a VampGirl x1, Cave Bat x3, Cave Bat x3
+147500 061 CaveNaga x1, Ogre x1
+150563 068 VampGirl x2, Cave Bat x3
+160250 050 AquaWorm x1, Piranha x3
+165000 08f Ironback x2
+165001 060 Mage x2
+165002 076 SwordMan x2
+165003 05d Ogre x2
+168000 123 Naga x2
+172250 05c Ogre x1, Panther x2
+174000 05a Cannibal x1, Treant x2
+175000 06f Centaur x3
+176875 053 AquaWorm x1, ElecFish x3
+180000 057 AquaWorm x2
+180500 054 AquaWorm x1, Hydra x1, Crocdile x1
+180600 0e4 Baigan x1, RightArm x1, Left Arm x1
+180601 0e5 Kainazzo x1
+181000 124 Medusa x1, Naga x1
+181500 13a TrapRose x2
+181625 069 Panther x2, Ogre x1, CaveNaga x1
+185750 065 Mage x1, Panther x1, Ogre x1
+187500 11d Medusa x2
+192500 063 Ogre x3
+194125 06b Marion x1, Puppet x1, Puppet x2
+195000 10f BlackLiz x2
+196125 04d FangShel x3, Aligator x1, Crocdile x1
+196126 066 Panther x2, Ogre x2
+196225 0e7 Dark Elf x1, Dark Elf x1
+198750 114 Tofu x3, Tofu x1
+200063 06c Marion x1, Puppet x1, Puppet x3
+200500 05b Python x1, StingRat x2
+206000 0a0 Lamia x1
+206000 1dc Lamia x1
+208688 115 Tofu x3, Tofu x3
+210000 095 Staleman x1
+216500 072 Ice Liz x1, Slime x3
+216750 088 Roc x1, Roc Baby x2
+220500 07b EpeeGirl x3
+222125 059 Panther x1, StingRat x3
+224000 08c GiantBat x3
+227500 107 BlackLiz x3
+227500 110 BlackLiz x3
+229375 089 Roc x1, Roc Baby x3
+230000 117 Chimera x1
+230250 07a EpeeGirl x2, SwordMan x2
+230500 058 StingRat x3, Treant x2
+236250 091 Ironback x2, BlackLiz x2
+237781 08e GiantBat x3, Cave Bat x3
+240000 101 Armadilo x2
+240001 08d GiantBat x3, GiantBat x1
+250000 070 Centaur x1, Gremlin x2
+251000 094 Red Bone x3, Skull x2
+252500 077 SwordMan x1, Ice Liz x2
+252501 090 Ironback x1, Armadilo x1, BlackLiz x1
+255000 07e Witch x1, EpeeGirl x1, Centaur x1
+257500 07c Witch x1, EpeeGirl x1, SwordMan x1
+257900 1c3 FlameDog x1
+258000 10a FlameDog x2
+260500 06d Centaur x1, IceBeast x2
+261500 081 Witch x1, EpeeGirl x2
+262375 108 Marion x1, EvilDoll x1, EvilDoll x2
+263000 079 SwordMan x1, IceBeast x2
+263500 07d EpeeGirl x1, Ice Liz x1, IceBeast x1
+264250 08b HugeCell x3
+266000 121 Alert x1, Naga x1
+266000 1e2 Alert x1, Naga x1
+266250 078 SwordMan x2, Ice Liz x2
+271250 080 Witch x1, SwordMan x2, EpeeGirl x1
+273000 06e Centaur x2, IceBeast x2
+273188 109 Marion x1, EvilDoll x1, EvilDoll x3
+275000 046 Lilith x1
+275625 075 Carapace x2, Ice Liz x2
+276500 092 Skull x3
+280000 138 Centpede x1
+281250 074 Gremlin x2, Ice Liz x2
+283125 08a HugeCell x3, HugeCell x1
+287500 112 Tortoise x2, BlackLiz x1
+295000 103 Armadilo x1, Tortoise x2
+295001 125 Stoneman x1
+296000 122 Alert x1, FlameDog x1
+296000 1e3 Alert x1, FlameDog x1
+296250 093 Skull x2, Skull x2
+299000 03f Lilith x1, Red Bone x2
+300500 07f Witch x1, IceBeast x2, EpeeGirl x1
+300600 0e8 Sandy x1, Cindy x1, Mindy x1
+300601 0ea Valvalis x1
+301000 10d FlameMan x1, FlameDog x2
+301001 10b FlameDog x3
+303750 113 Tortoise x2, BlackLiz x2
+306750 0d2 FlameDog x2, BlackLiz x2
+309000 0a1 Lamia x2
+311250 106 Tortoise x2, Armadilo x1, BlackLiz x1
+316000 119 Chimera x1, FlameMan x1
+322500 10e FlameMan x2, FlameDog x2
+322501 10c FlameDog x2, FlameDog x2
+322750 116 Chimera x1, Tofu x3
+328400 1c6 Staleman x2
+328500 096 Staleman x1, Skull x2
+333500 105 Tortoise x1, Dark Imp x2
+333600 100 Dark Imp x3
+334500 097 Staleman x1, Skull x2, Red Bone x2
+334600 1c0 Staleman x1, Skull x2, Skull x2
+335000 11f Alert x1, Chimera x1
+335000 1e0 Alert x1, Chimera x1
+340000 0a3 Lamia x1, Mad Ogre x1
+345000 118 Chimera x2
+355500 098 Mad Ogre x2
+357500 11c Stoneman x1, Medusa x1
+358750 161 Were Bat x3
+359000 11a Chimera x1, FlameMan x2
+359001 11b Chimera x1, FlameDog x2
+360000 1dd HugeNaga x1
+360500 0a2 Lamia x3
+363750 104 Dark Imp x2, Dark Imp x2
+367625 102 Dark Imp x3, Armadilo x1, BlackLiz x1
+367626 1a7 Cal x3, Brena x3, Calbrena x1
+369000 0aa Grudger x2
+370000 12c Ironman x1
+371000 153 Conjurer x1, Imp x1
+378000 1be Slime x1, Tofu x1, Pudding x1
+384375 160 Were Bat x2, Were Bat x2
+393000 128 Lamia x1, Q?Lamia x1
+400000 120 Alert x1, Stoneman x1
+400000 1e1 Alert x1, Stoneman x1
+409000 14f Hooligan x1
+412500 049 Lilith x2
+414750 099 Mad Ogre x3
+414750 1c2 Mad Ogre x3
+420000 09b BlackCat x2
+420500 0ad Grudger x2, Lamia x1
+430500 0ab Grudger x3
+434000 0a6 Balloon x3
+440000 158 Arachne x1
+442500 11e Stoneman x2
+442600 1a9 Dr?Lugae x1, Balnab x1, Balnab?Z x1
+442601 1b5 Dr?Lugae x1
+444375 09a Mad Ogre x2, Mad Ogre x2
+444375 1c4 Mad Ogre x2, Mad Ogre x2
+450000 09d Lamia x1, BlackCat x1, Mad Ogre x1
+450150 1e9 Centpede x2
+450250 139 TrapRose x1, Centpede x2
+451500 136 Grudger x1, BladeMan x2
+455000 0ae BladeMan x3
+463125 0a9 Grudger x1, Mad Ogre x1, Balloon x2
+464750 0ac Balloon x3, Grudger x1
+465000 166 Screamer x2
+465001 0a7 Balloon x2, Balloon x2
+469250 0af BlackCat x1, BladeMan x1, Mad Ogre x1
+469250 0b1 Mad Ogre x1, BladeMan x1, BlackCat x1
+470250 129 Lamia x3, Q?Lamia x1
+470250 12b Q?Lamia x1, Lamia x1, Lamia x2
+471500 0a4 BlackCat x2, Lamia x1
+471500 1c1 BlackCat x2, Lamia x1
+478875 0b3 Sorcerer x1, Mad Ogre x1, BladeMan x2
+479250 09e Mad Ogre x1, BlackCat x2
+479999 13c RockMoth x2
+480000 0b2 Green D? x1
+480000 12f Green D? x1
+480000 1c5 Green D? x1
+480000 1de Green D? x1
+482250 135 Grudger x2, BladeMan x2
+483750 1d9 Medusa x1, Gorgon x1, Stoneman x1
+484625 0b5 Sorcerer x1, BladeMan x1, BladeMan x2
+490000 09c BlackCat x3
+490001 1da Talantla x1, BlackCat x2
+490500 1bd Balloon x2, Grenade x2
+495000 130 BladeMan x1, BlackCat x1, Q?Lamia x1
+495625 0a8 Mad Ogre x1, BlackCat x1, Balloon x2
+497250 0a5 BlackCat x2, Lamia x2
+504625 0b4 Sorcerer x1, BlackCat x1, BladeMan x2
+508875 09f Mad Ogre x2, BlackCat x2
+510250 13e TrapRose x1, RockMoth x2
+511875 140 ToadLady x1, TinyToad x3
+515000 169 Screamer x1, HugeNaga x1
+515750 137 Grudger x1, BlackCat x2, BladeMan x1
+518500 0b0 BladeMan x1, BlackCat x1, Balloon x3
+525000 14c Red Eye x2
+525750 12a Q?Lamia x1, Lamia x1, BlackCat x2
+529625 132 Sorcerer x1, Q?Lamia x1, BlackCat x2
+529625 134 Sorcerer x1, Q?Lamia x1, BlackCat x2
+530000 154 Conjurer x1, RockMoth x1
+530625 13b RocLarva x2, RocLarva x2
+532109 141 ToadLady x1, TinyToad x3, TinyToad x3
+532109 1e5 ToadLady x1, TinyToad x3, TinyToad x3
+540000 168 HugeNaga x2
+540000 16e HugeNaga x1, HugeNaga x1
+550000 156 Conjurer x1, HugeNaga x1
+555000 12d Ironman x2
+558375 1bc Pudding x2, Grenade x2
+565000 12e Ironman x1, BladeMan x2
+573750 1bb Pudding x2, Pudding x2
+580000 131 Ironman x1, BlackCat x2
+584000 14e Hooligan x1, Red Eye x1
+586125 13d RockMoth x2, RocLarva x2
+592500 16a HugeNaga x1, Screamer x2
+593688 13f TrapRose x1, RockMoth x2, RocLarva x2
+609625 133 Sorcerer x1, Ironman x1, BlackCat x2
+609750 170 MoonCell x2, Pudding x2
+612500 14d Red Eye x3
+613500 150 Hooligan x2
+625000 155 Conjurer x1, Arachne x1
+639375 162 VampLady x1, Were Bat x3
+647500 145 Ghost x3
+660000 159 Arachne x2
+661797 163 VampLady x1, Were Bat x3, Were Bat x3
+693750 146 Ghost x2, Ghost x2
+693850 1e6 Ghost x3, Ghost x3
+699813 1d8 TrapRose x1, GlomWing x2, Crawler x2
+704625 0b6 Sorcerer x1, Green D? x1, BladeMan x2
+779688 164 VampLady x2, Were Bat x3
+800000 15a Clapper x1
+918750 171 Juclyote x1, Grenade x2
+966875 1bf Red Worm x1, Grenade x3
+985000 157 Conjurer x1, Clapper x1
+994375 148 Ghost x3, DarkTree x2
+1039500 174 Procyote x1, Pudding x2
+1102500 177 Red Worm x2
+1121150 1e4 Warrior x3, Warrior x2
+1121250 151 Warrior x2, Fiend x2
+1200000 15b Clapper x2
+1220313 172 Juclyote x2, MoonCell x2, Grenade x1
+1233750 0c0 Horseman x1, Beamer x2
+1240313 152 Warrior x2, Fiend x2, Fiend x2
+1311250 0ba Machine x2, Beamer x1
+1350000 173 Procyote x1, Juclyote x2
+1351875 0bb Machine x2, Beamer x2
+1357500 176 Red Worm x1, Procyote x1, Juclyote x1
+1372188 0c5 Machine x2, Beamer x3
+1377500 144 Molbol x1, Ghost x2
+1395000 175 Juclyote x1, Procyote x2
+1410000 187 D?Bone x1
+1470000 147 Molbol x1, Ghost x1, DarkTree x1
+1481250 0c1 Horseman x1, Beamer x1, Machine x1
+1485000 0c6 Horseman x2
+1485000 0d5 Horseman x2
+1495938 0cc Machine x3, Beamer x2
+1510000 191 D?Fossil x1
+1529900 1ea Procyote x2, Juclyote x2
+1530000 0d4 Horseman x1, Juclyote x2
+1562500 149 DarkTree x2, Molbol x1, Ghost x1
+1605000 0bd Horseman x1, Machine x2
+1605000 0d3 Horseman x1, Machine x2
+1645625 0cd Beamer x1, Machine x2, Horseman x1
+1650000 142 Molbol x2
+1650000 1e8 Molbol x1, Molbol x1
+1720000 14a Centpede x1, Molbol x2
+1730000 180 Warlock x1
+1858125 14b DarkTree x2, Molbol x2
+1858125 1e7 DarkTree x2, Molbol x2
+1890000 183 RedGiant x1
+1925000 143 Molbol x3
+1937500 196 PinkPuff x3, PinkPuff x2
+2000000 1b0 Asura x1
+2000001 0ff Rubicant x1
+2100000 194 Tricker x1
+2100000 195 Tricker x1
+2230000 0b8 Searcher x1, Machine x1
+2385000 181 Warlock x1, Kary x1
+2435000 189 D?Bone x1, Warlock x1
+2435100 1f2 D?Fossil x1, Warlock x1
+2436875 0c4 Searcher x1, Horseman x1, Beamer x2
+2500000 188 Ging?Ryu x1
+2537500 0b9 Searcher x1, Machine x1, Machine x2
+2622500 0bc Searcher x1, Horseman x1, Machine x2
+2712500 182 Warlock x1, Kary x2
+2800000 1ad Leviatan x1
+2800001 0fb Odin x1
+2835000 185 RedGiant x2
+2835000 1eb RedGiant x2
+3000000 192 King?Ryu x1
+3027400 1ed Warlock x1, Kary x3
+3027500 18b Warlock x3
+3082500 184 Warlock x1, Kary x1, RedGiant x1
+3082600 1ec Warlock x2, Kary x2
+3100000 0be MacGiant x1
+3187500 186 Warlock x2, RedGiant x1
+3400000 165 Yellow D x1
+3400000 1df Yellow D x1
+3445000 18f Ging?Ryu x1, RedGiant x1
+3500000 16b Mantcore x1
+3580000 16f Yellow D x1, HugeNaga x1
+3591250 0c9 MacGiant x1, Machine x1, Beamer x1
+3595000 0c3 MacGiant x1, Horseman x1
+3600000 18c Blue D? x1
+3655000 167 Mantcore x1, Screamer x1
+3676250 0ca MacGiant x1, Horseman x1, Beamer x1
+3770000 16d Mantcore x1, HugeNaga x2
+3770001 15e TrapDoor x1, Yellow D x1
+3770001 15f TrapDoor x1, Yellow D x1
+3770002 15c TrapDoor x1, Mantcore x1
+3770002 15d TrapDoor x1, Mantcore x1
+3770003 16c Mantcore x2
+3770004 1af EvilWall x1
+4000000 18d FatalEye x1
+4010000 0c2 Searcher x1, MacGiant x1
+4150000 0c7 D?Machin x1
+4250000 193 King?Ryu x1, Ging?Ryu x1
+4500000 18a King?Ryu x2
+4650000 0ce MacGiant x2
+5000000 0d6 EvilMask x1
+5000000 197 EvilMask x1
+5000000 19c EvilMask x1
+5180000 199 Red D? x1
+5181875 0c8 Searcher x1, D?Machin x1, Beamer x2
+5181975 1c7 Last Arm x1
+5400000 18e Blue D? x2
+5400000 1ef Blue D? x2
+5870000 198 Behemoth x1
+5870000 1a3 Behemoth x1
+5870000 1f0 Behemoth x1
+5870000 1f3 Behemoth x1
+5870000 1f4 Behemoth x1
+5870001 1ae Bahamut x1
+5880000 0dc Elements x1, Elements x1
+5880001 0dd CPU x1, Attacker x1, Defender x1
+6000000 1a1 Breath x1
+6000001 190 FatalEye x2
+6000100 1fb Pale Dim x1
+6500000 1a2 Mind x1
+7500000 19e EvilMask x2
+7769900 1ee Red D? x1, Blue D? x1
+7770000 19a Red D? x2
+7770000 1f1 Red D? x2
+7770001 1fd D? Lunar x1, D? Lunar x1
+7770002 1fe Plague x1
+7770100 1fa Ogopogo x1
+7770101 1fc Wyvern x1
+8460000 19b Red D? x1, Behemoth x1
+8805000 19d Behemoth x2
+9065000 19f Red D? x3
