@@ -79,9 +79,9 @@ def write_location_names():
     global LOCATION_NAMES
     f = open(get_outfile(), "r+b")
     f.seek(0xa9620)
-    for number in xrange(101):
+    for number in xrange(100):
         s = ""
-        for c in str(number):
+        for c in "{0:0>2}".format(number):
             s += chr(int(c) + 0x80)
         s += chr(0)
         f.write(s)
@@ -232,10 +232,28 @@ class Cluster(ReprSortMixin):
     def num_outs(self):
         return len(self.adjacencies)
 
+    @property
+    def health(self):
+        return self.num_outs
+
 
 class ClusterGroup:
     def __init__(self, clusters):
         self.clusters = sorted(set(clusters))
+
+    @property
+    def mapids(self):
+        return set([c.mapid for c in self.clusters])
+
+    @property
+    def health(self):
+        health = 0
+        for c in self.clusters:
+            if c.num_outs <= 1:
+                health -= 1
+            elif c.num_outs >= 3:
+                health += (c.num_outs - 2)
+        return health
 
     @property
     def connected_exits(self):
@@ -445,9 +463,10 @@ def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
     if segment_lengths is None:
-        #segment_lengths = [10, 15, 15, 15, 15, 15, 15]
-        segment_lengths = [10] + ([11] * 7) + [12]
-        segment_lengths = [100]
+        #upper limit is 155 for now
+        #segment_lengths = [10] + ([11] * 7) + [12]
+        segment_lengths = ([9] * 16) + [11]
+
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
@@ -456,7 +475,7 @@ def generate_cave_layout(segment_lengths=None):
     f.close()
     mapids = sorted(set([c.mapid for c in clusters]),
                     key = lambda m: (max(
-                        [len(mo.triggers) for mo in
+                        [len(mo.all_exits + mo.chests) for mo in
                          MapObject.reverse_grid_index(m)]), m))
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
@@ -536,35 +555,84 @@ def generate_cave_layout(segment_lengths=None):
         if choose not in special_maps:
             chosen.append(choose)
     assert not set(chosen) & set(special_maps)
+    clusters = [c for c in clusters if c.mapid in chosen]
 
-    for _ in xrange(5):
-        cluster_groups = []
-        for i, segment_length in enumerate(segment_lengths):
-            candidates = [m for m in chosen if m not in
-                          [c.mapid for cg in cluster_groups
-                           for c in cg.clusters]]
-            assert not set(candidates) & set(special_maps)
-            assert len(candidates) >= segment_length
-            for _ in xrange(5):
+    for _ in xrange(20):
+        cluster_groups = [ClusterGroup([]) for _2 in
+                          xrange(len(segment_lengths))]
+        for i, cg in enumerate(cluster_groups):
+            cg.index = i
+        to_assign = sorted(clusters)
+        random.shuffle(to_assign)
+        while to_assign:
+            cluster_more = []
+            for i, cg in enumerate(cluster_groups):
+                if segment_lengths[i] > len(cg.mapids):
+                    cluster_more.append(cg)
+            mapid = to_assign[0].mapid
+            assign_next = [c for c in to_assign if c.mapid == mapid]
+            cg = random.choice(cluster_more)
+            for a in assign_next:
+                cg.clusters.append(a)
+                to_assign.remove(a)
+
+        num_unhealthy = len(cluster_groups)
+        if sum(cg.health for cg in cluster_groups) < len(segment_lengths):
+            continue
+
+        for _2 in xrange(100):
+            num_unhealthy = len([cg for cg in cluster_groups if cg.health < 1])
+            if num_unhealthy == 0:
+                break
+            cluster_groups = sorted(cluster_groups,
+                                    key=lambda cg: (cg.health, cg.index))
+            unhealthy = [cg for cg in cluster_groups if cg.health < 1]
+            healthy = [cg for cg in cluster_groups if cg.health > 1]
+            max_index = len(unhealthy)-1
+            index = random.randint(0, random.randint(0, max_index))
+            cgu = unhealthy[index]
+            max_index = len(healthy)-1
+            index = random.randint(random.randint(0, max_index), max_index)
+            cgh = healthy[index]
+
+            unhealthy = sorted(cgu.clusters, key=lambda c: (c.health, c))
+            healthy = sorted(cgh.clusters, key=lambda c: (c.health, c))
+            max_index = len(unhealthy)-1
+            index = random.randint(0, random.randint(0, max_index))
+            aa = unhealthy[index].mapid
+            aa = [c for c in unhealthy if c.mapid == aa]
+            max_index = len(healthy)-1
+            index = random.randint(random.randint(0, max_index), max_index)
+            bb = healthy[index].mapid
+            bb = [c for c in healthy if c.mapid == bb]
+            for a in aa:
+                cgu.clusters.remove(a)
+                cgh.clusters.append(a)
+            for b in bb:
+                cgu.clusters.append(b)
+                cgh.clusters.remove(b)
+        else:
+            continue
+
+        for cg in cluster_groups:
+            for _2 in xrange(5):
                 try:
-                    sampler = random.sample(candidates, segment_length)
-                    sampler = sorted(set([c for c in clusters
-                                          if c.mapid in sampler]))
-                    assert len(sampler) >= segment_length
-                    cg = ClusterGroup(sampler)
                     cg.full_execute()
-                    cluster_groups.append(cg)
                     break
                 except CaveException:
                     continue
             else:
                 cluster_groups = []
                 break
-        if len(cluster_groups) == len(segment_lengths):
+
+        if [len(cg.mapids) for cg in cluster_groups] == segment_lengths:
             break
+
     else:
         print "Retrying cave generation..."
         return generate_cave_layout(segment_lengths)
+
+    random.shuffle(cluster_groups)
 
     for after, before in replace_dict.items():
         assert before in to_replace
@@ -646,7 +714,7 @@ def generate_cave_layout(segment_lengths=None):
         for c in cg.clusters:
             c.cluster_group = cg
             m = MapObject.reverse_grid_index_canonical(c.mapid)
-            m.name_index = base_rank + c.rank + 1
+            m.name_index = (base_rank + c.rank + 1) % 100
             m.music = cg.music
         cg.create_exit_triggers()
 
@@ -660,7 +728,7 @@ def generate_cave_layout(segment_lengths=None):
     zemus = MapObject.reverse_grid_index_canonical(replace_dict[ZEMUS_INDEX])
     zemus.background = zemus.index
     zemus.bg_properties = 0x86
-    zemus.name_index = 101
+    zemus.name_index = 100
     zemus.music = 17
     zemus.set_battle_bg(0)
 
@@ -858,7 +926,7 @@ def generate_cave_layout(segment_lengths=None):
         lung = unused_maps.pop()
         lung.copy_data(giant_lung)
         lung.npc_placement_index = PlacementObject.canonical_zero
-        lung.name_index = 101
+        lung.name_index = 100
         lung.music = LUNG_SONG
         lung.set_battle_bg(random.randint(0, 15))
 
@@ -897,8 +965,9 @@ def generate_cave_layout(segment_lengths=None):
             ]
         yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF, 0xFF]
 
-        summon = summons.pop()
-        boss_event += [0xE2, 0x04, summon]
+        if summons:
+            summon = summons.pop()
+            boss_event += [0xE2, 0x04, summon]
         if learn_increment >= len(tellah_learn_spells):
             to_learn = list(tellah_learn_spells)
         else:
@@ -1871,6 +1940,10 @@ class MapObject(TableObject):
     @property
     def exits(self):
         return [x for x in self.triggers if x.is_exit]
+
+    @property
+    def all_exits(self):
+        return self.exits + self.warps
 
     @property
     def chests(self):
