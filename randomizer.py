@@ -718,13 +718,13 @@ def generate_cave_layout(segment_lengths=None):
             m.music = cg.music
         cg.create_exit_triggers()
 
+    lunar_whale = MapObject.reverse_grid_index_canonical(
+        replace_dict[LUNAR_WHALE_INDEX])
     for m in MapObject.every:
-        if m.grid_index not in active_maps:
+        if m.grid_index not in active_maps and m != lunar_whale:
             for t in m.triggers:
                 t.groupindex = -1
 
-    lunar_whale = MapObject.reverse_grid_index_canonical(
-        replace_dict[LUNAR_WHALE_INDEX])
     zemus = MapObject.reverse_grid_index_canonical(replace_dict[ZEMUS_INDEX])
     zemus.background = zemus.index
     zemus.bg_properties = 0x86
