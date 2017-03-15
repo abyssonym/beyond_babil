@@ -1,16 +1,17 @@
 # objname tablefile address count grouped
 StatusLoadObject    status_load_table.txt       669a    20
 StatusSaveObject    status_save_table.txt       671d    20
-AIFixObject         ai_fix_table.txt            1ffc0   64
+AIFixObject         ai_fix_table.txt            7d40    64
 FormationObject     formation_table.txt         70000   512
 MonsterNameObject   monster_name_table.txt      71800   224
 MonsterDropObject   monster_drop_table.txt      71f00   64
 MonsterGilObject    monster_gil_table.txt       72000   224
 MonsterXPObject     monster_xp_table.txt        721c0   224
 MonsterObject       monster_table.txt           726a0   224     point1  68000 2
+EncounterRateObject encounter_rate_table.txt    74342   384
 OverworldEncObject  encounter_table.txt         74542   84
 EncounterObject     encounter_table.txt         74596   384
-PackObject          pack_table.txt              74816   80
+PackObject          pack_table.txt              74816   93
 #AIGroupObject       ai_group_table.txt          76030   254     delimit 255
 # ai scripts        76900   256
 # lunar scripts     736c0   90

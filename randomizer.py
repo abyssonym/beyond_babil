@@ -70,7 +70,6 @@ def get_location_names():
                 #print "ALERT", hex(v)
                 s += "~"
         LOCATION_NAMES.append(s)
-    print hex(f.tell())
     f.close()
     return get_location_names()
 
@@ -244,6 +243,14 @@ class ClusterGroup:
     @property
     def mapids(self):
         return set([c.mapid for c in self.clusters])
+
+    @property
+    def ranked_mapids(self):
+        mapids = []
+        for c in sorted(self.clusters, key=lambda c: c.rank):
+            if c.mapid not in mapids:
+                mapids.append(c.mapid)
+        return mapids
 
     @property
     def health(self):
@@ -459,12 +466,271 @@ class ClusterGroup:
                 b.create_exit_trigger(amap, ax, ay)
 
 
+def assign_formations(cluster_groups):
+    print "ASSIGNING FORMATIONS"
+    formations = [f for f in FormationObject.every if f.rank > 0]
+    random.shuffle(formations)
+    signatures = set([])
+    temp = []
+    for f in formations:
+        if f.signature not in signatures:
+            temp.append(f)
+            signatures.add(f.signature)
+    formations = temp
+    monsters = sorted(set(m for f in formations for m in f.monsters))
+    random.shuffle(monsters)
+    done_monsters = set([])
+    new_formations = []
+    for m in monsters:
+        if m in done_monsters:
+            continue
+        candidates = [f for f in formations if m in f.monsters]
+        candidates = sorted(candidates, key=lambda f: f.rank)
+        max_index = len(candidates)-1
+        index = random.randint(random.randint(0, max_index), max_index)
+        chosen = candidates[index]
+        done_monsters |= set(chosen.monsters)
+        new_formations.append(chosen)
+    new_formations.append(FormationObject.get(0x1b7))  # Zeromus
+    unused_formations = [f for f in formations if f not in new_formations]
+    unused_formations = sorted(unused_formations, key=lambda f: f.rank)
+    while len(new_formations) < 256:
+        max_index = len(unused_formations)-1
+        index = random.randint(random.randint(0, max_index), max_index)
+        chosen = unused_formations[index]
+        new_formations.append(chosen)
+        unused_formations.remove(chosen)
+    unused_formations = [f for f in FormationObject.every
+                         if f not in new_formations and f.index < 0x100]
+    for i in xrange(0x100):
+        AIFixObject.set_formation_ai(i, False)
+    for n in list(new_formations):
+        if n.index >= 0x100:
+            u = unused_formations.pop()
+            u.reassign_data(n)
+            new_formations.remove(n)
+            new_formations.append(u)
+            n = u
+        if n.is_lunar_ai_formation:
+            AIFixObject.set_formation_ai(n.index, True)
+
+    bosses = [f for f in new_formations if f.get_bit("no_flee") and
+              f.battle_music != 0]
+    zeromus = [b for b in bosses if "Zeromus" in b.signature][0]
+    nonbosses = [f for f in new_formations if f not in bosses]
+    bosses.remove(zeromus)
+    randoms = random.sample(nonbosses, 200)
+    extras = [f for f in nonbosses if f not in randoms]
+
+    randoms = sorted(randoms, key=lambda f: (f.rank, f.index))
+    to_assign = list(randoms)
+    max_pack = len(PackObject.every)-1
+    packdict = defaultdict(list)
+
+    def index_modifier():
+        return random.random() * random.random() * random.choice([0.1, -0.1])
+
+    while True:
+        random.shuffle(to_assign)
+        for f in to_assign:
+            index = randoms.index(f) / float(len(randoms)-1)
+            if index <= 0.5:
+                index *= (1 + index_modifier())
+            else:
+                index = 1-index
+                index *= (1 + index_modifier())
+                index = 1-index
+            index = index * max_pack
+            index = int(round(min(max_pack, max(0, index))))
+            if (index < max_pack and len(packdict[index]) > 1
+                    and len(packdict[index+1]) <= 1):
+                index += 1
+            elif (index > 0 and len(packdict[index]) > 1
+                    and len(packdict[index-1]) <= 1):
+                index -= 1
+            if len(packdict[index]) < 7:
+                packdict[index].append(f)
+                assert 0 < len(packdict[index]) < 8
+
+        if all([len(packdict[i]) >= 2 for i in xrange(max_pack+1)]):
+            break
+
+    for i in xrange(max_pack+1):
+        formations = packdict[i]
+        if len(formations) >= 7:
+            continue
+        monsters = set([m for f in formations for m in f.monsters])
+
+        necessary_monsters = set([])
+        for m in sorted(monsters):
+            if all([m in f.monsters for f in formations]):
+                necessary_monsters.add(m)
+        if necessary_monsters:
+            candidates = [f for f in randoms + extras
+                          if necessary_monsters <= set(f.monsters)]
+        else:
+            candidates = [f for f in randoms + extras
+                          if set(f.monsters) <= monsters]
+        while len(formations) < 7:
+            formations.append(random.choice(candidates))
+        for f in formations:
+            if f in extras:
+                extras.remove(f)
+        random.shuffle(packdict[i])
+
+    packids = range(max_pack+1)
+    pack_assignments = defaultdict(set)
+    for i, cg in enumerate(cluster_groups):
+        portion = len(cg.mapids) / float(sum(
+            [len(cg2.mapids) for cg2 in cluster_groups[i:]]))
+        num_packs = int(round(portion * len(packids)))
+        num_packs = max(num_packs, 1)
+        for p in packids[:num_packs]:
+            pack_assignments[i].add(p)
+            packids.remove(p)
+
+    formation_assignments = defaultdict(set)
+    for i in pack_assignments:
+        packids = pack_assignments[i]
+        formations = set([f for p in packids for f in packdict[p]])
+        formation_assignments[i] |= formations
+
+    boss_assignments = []
+    prev_boss_rank = 0
+    for i in xrange(len(cluster_groups)-1):
+        lower = max([f.rank for f in formation_assignments[i]])
+        j = i
+        while True:
+            j += 1
+            if j >= len(cluster_groups)-1:
+                upper = None
+                break
+            upper = max([f.rank for f in formation_assignments[j]])
+            boss_candidates = set([b for b in bosses if lower < b.rank])
+            next_candidates = set([b for b in bosses if upper < b.rank])
+            boss_candidates -= next_candidates
+            if not boss_candidates:
+                continue
+            boss_candidates = sorted(boss_candidates,
+                                     key=lambda b: (b.rank, b.index))
+            temp = [b for b in boss_candidates if b.rank > prev_boss_rank]
+            if temp:
+                boss_candidates = temp
+            max_index = len(boss_candidates)-1
+            index = random.randint(0, random.randint(0, max_index))
+            chosen = boss_candidates[index]
+            bosses.remove(chosen)
+            boss_assignments.append(chosen)
+            prev_boss_rank = max(chosen.rank, prev_boss_rank)
+            break
+        if upper is None:
+            break
+
+    remaining = len(cluster_groups) - len(boss_assignments) - 1
+    if remaining:
+        boss_candidates = [b for b in bosses if b.rank > prev_boss_rank]
+        if len(boss_candidates) < remaining:
+            last_bosses = sorted(bosses,
+                                 key=lambda b: b.rank)[-remaining:]
+        else:
+            last_bosses = random.sample(boss_candidates, remaining)
+        boss_assignments += sorted(
+            last_bosses, key=lambda b: (b.rank, b.index))
+        for b in last_bosses:
+            bosses.remove(b)
+
+    assert len(boss_assignments) == len(cluster_groups)-1
+    boss_assignments.append(zeromus)
+
+    for b, cg in zip(boss_assignments, cluster_groups):
+        cg.boss = b
+
+    for i, cg in enumerate(cluster_groups):
+        if bosses:
+            if hasattr(cg, "boss"):
+                upper = cg.boss.rank
+            else:
+                upper = max([c.rank for c in bosses]) + 1
+            if i > 0:
+                b2 = boss_assignments[i-1]
+                lower = b2.rank
+            else:
+                lower = 0
+            candidates = [c for c in bosses if lower <= c.rank < upper]
+            if candidates:
+                packs = [packdict[p] for p in sorted(pack_assignments[i])]
+                random.shuffle(packs)
+                if len(candidates)*2 < len(packs):
+                    candidates = candidates + candidates
+                random.shuffle(candidates)
+                for c, p in zip(candidates, packs):
+                    assert len(p) == 7
+                    p.append(c)
+        packs = [packdict[p] for p in sorted(pack_assignments[i])]
+        for p in packs:
+            if len(p) >= 8 and p[7] in bosses:
+                bosses.remove(p[7])
+            elif len(p) < 8:
+                assert len(p) == 7
+                p.append(random.choice(p))
+        cg.packs = packs
+        cg.formations = sorted(set([f for p in cg.packs for f in p]))
+
+    assert all(hasattr(cg, "boss") for cg in cluster_groups)
+
+    for p in PackObject.every:
+        p.formation_ids = [f.index for f in packdict[p.index]]
+        for f in p.formations:
+            assert f.rank > 0
+
+    for cgi, cg in enumerate(cluster_groups):
+        packs = sorted(pack_assignments[cgi])
+        mapids = list(cg.ranked_mapids)
+        if len(packs) > len(mapids):
+            packs = sorted(random.sample(packs, len(mapids)))
+        max_pack = len(packs)-1
+        max_map = float(len(mapids)-1)
+        for i, m in enumerate(mapids):
+            index = int(round((i / max_map) * max_pack))
+            pack = packs[index]
+            assert m < 0x100
+            e = EncounterObject.get(m)
+            e.encounter = pack
+
+    for cgi, cg in enumerate(cluster_groups):
+        for p in cg.packs:
+            for f in p:
+                if f.get_bit("no_flee"):
+                    f.set_bit("no_flee", False)
+                else:
+                    f.set_music(3)
+        if cgi >= len(cluster_groups)-1:
+            assert cg.boss == zeromus
+            cg.boss.set_music(3)
+            # set correct background for zeromus
+            f = open(get_outfile(), 'r+b')
+            f.seek(0x73D)
+            write_multi(f, cg.boss.index, length=2)
+            f.seek(0x73D+2)
+            f.write(chr(0xD0))
+            f.close()
+        elif cg.boss.battle_music == 3:
+            if cgi > len(cluster_groups) / 2:
+                cg.boss.set_music(2)
+            else:
+                cg.boss.set_music(1)
+
+    zeromus.monster_types = [255, 201, 255]
+    zeromus.monster_qty = 0b00010000
+
+
 def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
     if segment_lengths is None:
         #upper limit is 155 for now
         #segment_lengths = [10] + ([11] * 7) + [12]
+        #segment_lengths = [3] * 17
         segment_lengths = ([9] * 16) + [11]
 
     clusterpath = path.join(tblpath, "clusters.txt")
@@ -506,7 +772,7 @@ def generate_cave_layout(segment_lengths=None):
     chosen = []
     to_replace = []
     replace_dict = {}
-    #random.seed(int(time()))
+
     LUNAR_WHALE_INDEX = 0x12c
     ZEMUS_INDEX = 0x172
     lunar_whale = MapGridObject.superget(LUNAR_WHALE_INDEX)
@@ -515,7 +781,10 @@ def generate_cave_layout(segment_lengths=None):
     lunar_whale.overwrite_map_data(lunar_whale_map)
     zemus = MapGridObject.superget(ZEMUS_INDEX)
     zemus_map = zemus.map
-    zemus_map[15][15] = 0x7F
+    zemus_map[15][15] = 0x45
+    zemus_map[23][14] = 0x60
+    zemus_map[23][15] = 0x45
+    zemus_map[23][16] = 0x60
     zemus.overwrite_map_data(zemus_map)
     special_maps = [LUNAR_WHALE_INDEX, ZEMUS_INDEX]
     while len(chosen) < sum(segment_lengths):
@@ -542,8 +811,12 @@ def generate_cave_layout(segment_lengths=None):
             sort_func = lambda m: (m.size, m.index)
             candidates = (sorted(priority, key=sort_func) +
                           sorted(candidates, key=sort_func))
+            # the zeroth map should have trigger data that starts with a low
+            # byte value or else it will be mistaken by ff4kster for another
+            # pointer in the table
             candidates = [c for c in candidates
-                          if MapObject.reverse_grid_index(c.index)]
+                          if MapObject.reverse_grid_index(c.index)
+                          and c.index > 0]
             max_index = len(candidates)-1
             candchoose = random.randint(0, random.randint(0, max_index))
             candchoose = candidates[candchoose]
@@ -729,8 +1002,11 @@ def generate_cave_layout(segment_lengths=None):
     zemus.background = zemus.index
     zemus.bg_properties = 0x86
     zemus.name_index = 100
-    zemus.music = 17
+    zemus.music = 11
+    lunar_whale.music = 14
     zemus.set_battle_bg(0)
+    EncounterRateObject.get(zemus.index).encounter_rate = 0
+    EncounterRateObject.get(lunar_whale.index).encounter_rate = 0
 
     used_maps = set([MapObject.reverse_grid_index_canonical(m)
                      for m in active_maps])
@@ -745,6 +1021,9 @@ def generate_cave_layout(segment_lengths=None):
     for u in unused_maps:
         u.neutralize()
     used_events = set([e for m in MapObject.every for e in m.events])
+    banned_events = set([e for e in EventObject.every if e.index in
+                         [0x76, 0x77, 0x78]])
+    used_events |= banned_events
     unused_events = [e for e in EventObject.every if e not in used_events]
     unused_events = sorted(unused_events, key=lambda e: (e.size, e.index))
     used_event_calls = set([e for m in MapObject.every for e in m.event_calls])
@@ -762,32 +1041,59 @@ def generate_cave_layout(segment_lengths=None):
     unused_flags = range(88, 0xFE)
     unused_flags.remove(225)
 
+    def make_simple_event_call(event, npc=False):
+        candidate_events = [e for e in unused_events if e.size >= len(event)]
+        chosen = candidate_events.pop(0)
+        unused_events.remove(chosen)
+        chosen.overwrite_event(event)
+        cases = [([], chosen.index)]
+        size = len(EventCallObject.cases_to_bytecode(cases))
+        candidate_event_calls = [e for e in unused_event_calls if e.size >= size]
+        event_call = candidate_event_calls.pop(0)
+        event_call.overwrite_event_call(cases)
+        unused_event_calls.remove(event_call)
+        return event_call
+
     start = cluster_groups[0].start
+    finish = cluster_groups[-1].finish
     x = sum([a.xx for a in start]) / len(start)
     y = sum([a.yy for a in start]) / len(start)
     mapid = start[0].mapid
     TriggerObject.create_trigger(
         mapid=lunar_whale.index, x=2, y=13,
         misc1=mapid, misc2=(x|0x80), misc3=y)
+    event = [
+        0xF0, 0x24,
+        0xF8, 0xC0,
+        0xFE, zemus.index, 16, 23, 0x00,
+        0xFA, zemus.music,
+        0xFF,
+        0xC3,
+        0xFF,
+        ]
+
+    event_call = make_simple_event_call(event)
     TriggerObject.create_trigger(
         mapid=lunar_whale.index, x=12, y=13,
-        misc1=mapid, misc2=(x|0x80), misc3=y)
+        misc1=0xFF, misc2=event_call.index, misc3=0x00)
     for a in start:
         TriggerObject.create_trigger(
             mapid=a.mapid, x=a.x, y=a.y,
             misc1=lunar_whale.index, misc2=(2|0x80), misc3=13)
 
-    finish = cluster_groups[-1].finish
     x = sum([a.xx for a in finish]) / len(finish)
     y = sum([a.yy for a in finish]) / len(finish)
     mapid = finish[0].mapid
     TriggerObject.create_trigger(
-        mapid=zemus.index, x=15, y=23,
+        mapid=zemus.index, x=14, y=23,
         misc1=mapid, misc2=(x|0x80), misc3=y)
+    TriggerObject.create_trigger(
+        mapid=zemus.index, x=16, y=23,
+        misc1=lunar_whale.index, misc2=(12|0x80), misc3=13)
     for a in finish:
         TriggerObject.create_trigger(
             mapid=a.mapid, x=a.x, y=a.y,
-            misc1=zemus.index, misc2=(15|0x80), misc3=23)
+            misc1=zemus.index, misc2=(14|0x80), misc3=23)
 
     warriors = [4, 10, 12, 9, 1, 6, 0]
     mages = [5, 11, 3]
@@ -855,20 +1161,18 @@ def generate_cave_layout(segment_lengths=None):
 
     cluster_groups[0].home = lunar_whale.index, 7, 10
 
+    assign_formations(cluster_groups)
+
     ZEMUS_FLAME = 66
     placement_index = unused_placement_indexes.pop()
     zemus.npc_placement_index = placement_index
     for p in zemus.npc_placements:
         p.groupindex = -1
 
-    formation = 0
-    f = open(get_outfile(), 'r+b')
-    f.seek(0x73D)
-    write_multi(f, formation, length=2)
-    f.close()
+    # final boss / zeromus battle
     event = [
-        0xD8,
-        0xEC, formation,
+        0xFA, 0x07,
+        0xEC, cluster_groups[-1].boss.index,
         0xE9, 0x02,
         0x08,
         0xFB, 0x55,
@@ -918,9 +1222,28 @@ def generate_cave_layout(segment_lengths=None):
     except ZeroDivisionError:
         learn_increment = 999
 
+    all_battle_bgs = [(x, False) for x in range(0x10)]
+    all_battle_bgs.extend([(x, True) for x in ALTERNATE_PALETTE_BATTLE_BGS])
+    lung_battle_bgs = list(all_battle_bgs)
+    done_battle_bgs = set([
+        (MapObject.get(mapid).battle_bg,
+         MapObject.get(mapid).get_bit("alternate_palette"))
+        for cg in cluster_groups for mapid in cg.mapids])
+    lung_battle_bgs = [l for l in lung_battle_bgs if l not in done_battle_bgs]
+    assert len(cluster_groups)-1 < len(all_battle_bgs)
+    while len(lung_battle_bgs) < len(cluster_groups)-1:
+        b = random.choice(all_battle_bgs)
+        if b in lung_battle_bgs:
+            continue
+        lung_battle_bgs.append(b)
+    random.shuffle(lung_battle_bgs)
+
     LUNG_SONG = 2  # long way to go
     lungs = []
+    counter = 0
     for aa, bb in zip(cluster_groups, cluster_groups[1:]):
+        counter += 1
+        formation = aa.boss.index
         aa = aa.finish
         bb = bb.start
         lung = unused_maps.pop()
@@ -928,7 +1251,10 @@ def generate_cave_layout(segment_lengths=None):
         lung.npc_placement_index = PlacementObject.canonical_zero
         lung.name_index = 100
         lung.music = LUNG_SONG
-        lung.set_battle_bg(random.randint(0, 15))
+        bbg, truth = lung_battle_bgs.pop()
+        lung.set_battle_bg(bbg)
+        lung.set_bit("alternate_palette", truth)
+        EncounterRateObject.get(lung.index).encounter_rate = 0
 
         ax = sum([a.xx for a in aa]) / len(aa)
         ay = sum([a.yy for a in aa]) / len(aa)
@@ -950,7 +1276,6 @@ def generate_cave_layout(segment_lengths=None):
         for b in bb:
             b.create_exit_trigger(lung.index, t.x, t.y, use_given_mapid=True)
 
-        formation = 0
         flag = unused_flags.pop()
         boss_event = [
             #0xD8,
@@ -1023,6 +1348,7 @@ class AIFixObject(TableObject):
 
 class FormationObject(TableObject):
     def __repr__(self):
+        return "%x %s" % (self.index, self.signature)
         names = []
         for i, t in enumerate(self.monster_types):
             try:
@@ -1034,16 +1360,29 @@ class FormationObject(TableObject):
         return "%x %s" % (self.index, ", ".join(names))
         return "%x %s %s %s" % (self.index, self.rank, self.prerank, ", ".join(names))
 
+    def reassign_data(self, other):
+        if self is other:
+            raise Exception("Both formations are the same.")
+        self.copy_data(other)
+        self._rank = other._rank
+        self._is_lunar_ai_formation = other.is_lunar_ai_formation
+
     @property
     def is_lunar_ai_formation(self):
+        if hasattr(self, "_is_lunar_ai_formation"):
+            return self._is_lunar_ai_formation
         for m in MapObject.every:
             if m.is_lunar_ai_map:
                 if EncounterObject.get(m.index).encounter == 0:
                     if self in m.event_battles:
-                        return True
+                        self._is_lunar_ai_formation = True
+                        break
                 elif self in m.all_formations:
-                    return True
-        return False
+                    self._is_lunar_ai_formation = True
+                    break
+        else:
+            self._is_lunar_ai_formation = False
+        return self.is_lunar_ai_formation
 
     @property
     def monsters(self):
@@ -1056,6 +1395,14 @@ class FormationObject(TableObject):
             num = (self.monster_qty >> (6 - (2*i))) & 0b11
             monsters.extend([m for _ in xrange(num)])
         return monsters
+
+    @property
+    def signature(self):
+        monster_names = [m.name for m in self.monsters]
+        s = []
+        for name, count in sorted(Counter(monster_names).items()):
+            s.append("%s x%s" % (name, count))
+        return ", ".join(s)
 
     @property
     def is_boss(self):
@@ -1101,9 +1448,12 @@ class FormationObject(TableObject):
     @property
     def rank(self):
         if hasattr(self, "_rank"):
-            return self._rank
+            return self._rank + (self.index / 1000.0)
         f = open(path.join(tblpath, "formation_ranks.txt"))
         for line in f:
+            line = line.strip()
+            if not line or line[0] == "#":
+                continue
             rank, index, etc = line.split(" ", 2)
             rank = int(rank)
             index = int(index, 0x10)
@@ -1119,6 +1469,11 @@ class FormationObject(TableObject):
     @property
     def battle_music(self):
         return (self.misc2 >> 2) & 0b11
+
+    def set_music(self, value):
+        self.misc2 = self.misc2 & 0b11110011
+        self.misc2 |= (value << 2)
+        assert self.battle_music == value
 
     @property
     def scenario(self):
@@ -1232,6 +1587,10 @@ class MonsterObject(TableObject):
     def __repr__(self):
         return "%s %s %s" % ("{0:0>2}".format("%x" % self.index), int(round(self.rank)), self.name)
 
+    @classmethod
+    def write_all(cls, filename):
+        pass
+
     @property
     def name(self):
         return MonsterNameObject.get(self.index).name
@@ -1271,6 +1630,9 @@ class MonsterObject(TableObject):
         return self.drop_index >> 6
 
 
+class EncounterRateObject(TableObject): pass
+
+
 class EncounterObject(TableObject):
     def __repr__(self):
         s = "ENCOUNTER %s %s\n" % (self.index, MapObject.get(self.index).name)
@@ -1291,6 +1653,14 @@ class PackObject(TableObject):
         for f in self.get_formations():
             s += str(f) + "\n"
         return s.strip()
+
+    @property
+    def formations(self):
+        return self.get_formations()
+
+    @property
+    def rank(self):
+        return (max([f.rank for f in self.formations[:7]]), self.index)
 
     def get_formations(self, alternate=False):
         if alternate:
@@ -1838,6 +2208,10 @@ class MapObject(TableObject):
         return s.strip()
 
     @property
+    def encounter_rate(self):
+        return EncounterRateObject.get(self.index).encounter_rate
+
+    @property
     def is_lunar_ai_map(self):
         return (0x15a <= self.index <= 0x15c or
                 0x167 <= self.index <= 0x17e)
@@ -2155,7 +2529,7 @@ class MapGrid2Object(MapGridObject):
 
 
 def setup_opening_event(mapid=0, x=16, y=30, running=False):
-    chosen = random.randint(1, 12)
+    chosen = random.choice(range(0, 9) + [10, 13, 17])
     new_event = [
         0xFA, 0x0E,                 # play lunar whale theme
         0xE8, 0x01,                 # remove DK cecil
@@ -2232,10 +2606,11 @@ def setup_cave():
             if t.groupindex == mapid and t.x == x and t.y == y and t.is_event:
                 t.neutralize()
     for t in TileObject.every:
-        t.set_bit("encounters", False)
         if t.get_bit("warp"):
             t.set_bit("warp", False)
             t.set_bit("triggerable", True)
+        if not (t.get_bit("triggerable") or t.get_bit("save_point")):
+            t.set_bit("encounters", True)
 
     available_placements = PlacementObject.available_placements
     PlacementObject.canonical_zero = available_placements[0]
@@ -2245,6 +2620,8 @@ def setup_cave():
         m.set_bit("warpable", False)
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
+        EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
+            [random.randint(0, 3) for _ in xrange(3)])
 
     for i in InitialEquipObject.every:
         for attr, _, _ in InitialEquipObject.specsattrs:
@@ -2313,23 +2690,13 @@ def undummy():
 def lunar_ai_fix(filename=None):
     if filename is None:
         filename = get_outfile()
-    FORMATION_FLAGS_ADDR = 0x1FFC0
-    FUNCTION_ADDR = 0x1FEE3
-    CALL_ADDR_1 = 0x192A1
-    CALL_ADDR_2 = 0x193FA
-
-    call_asm = [
-        0x20, FUNCTION_ADDR & 0xFF, (FUNCTION_ADDR >> 8) & 0xFF,
-        0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA,
-        ]
-    f = open(filename, "r+b")
-    f.seek(CALL_ADDR_1)
-    f.write("".join(map(chr, call_asm)))
-    f.seek(CALL_ADDR_2)
-    f.write("".join(map(chr, call_asm)))
+    FORMATION_FLAGS_ADDR = 0xFD40
+    FUNCTION_ADDR = 0x74B
+    OVERWRITE_LIMIT = 0x775
 
     function_asm = [
         0xDA,                   # PHX
+        0x5A,                   # PHY
         0xAD, 0x00, 0x18,       # LDA $1800
         0xAA,                   # TAX
         0x29, 0x07,             # AND #$07
@@ -2345,20 +2712,31 @@ def lunar_ai_fix(filename=None):
         0x2A,                   # ROL A
         0x88,                   # DEY
         0xD0, 0xFC,             # BNE -2
-        # BIT $FFC0,X
-        #0x3C, FORMATION_FLAGS_ADDR & 0xFF, (FORMATION_FLAGS_ADDR >> 8) & 0xFF,
-        # AND $03FFC0,X
-        0x3F, FORMATION_FLAGS_ADDR & 0xFF, (FORMATION_FLAGS_ADDR >> 8) & 0xFF, (FORMATION_FLAGS_ADDR >> 16) | 0x02,
-        0xD0, 0x05,             # BNE +5
-        0xA0, 0x00, 0xE9,       # LDY #$E900
-        0x80, 0x03,             # BRA +3
-        0xA0, 0xC0, 0xB6,       # LDY #$B6C0
+        # AND $7D40,X
+        0x3F, FORMATION_FLAGS_ADDR & 0xFF, (FORMATION_FLAGS_ADDR >> 8) & 0xFF, (FORMATION_FLAGS_ADDR >> 16),
+        0xF0, 0x08,             # BEQ +8
+        0xAD, 0x01, 0x18,       # LDA $1801
+        0x09, 0x80,             # ORA $#80
+        0x8D, 0x01, 0x18,       # STA $1801
+        0x7A,                   # PLY
         0xFA,                   # PLX
-        0x60,                   # RTS
         ]
+    assert FUNCTION_ADDR + len(function_asm) <= OVERWRITE_LIMIT
+    while FUNCTION_ADDR + len(function_asm) < OVERWRITE_LIMIT:
+        function_asm.append(0xEA)
+
+    f = open(filename, "r+b")
     f.seek(FUNCTION_ADDR)
     f.write("".join(map(chr, function_asm)))
     f.close()
+
+    for f in FormationObject.every:
+        f.is_lunar_ai_formation
+
+
+def unload_fusoya_spellsets():
+    for ss in InitialSpellObject.getgroup(11):
+        ss.groupindex = -1
 
 
 if __name__ == "__main__":

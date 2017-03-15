@@ -278,7 +278,7 @@
 434000 0a6 Balloon x3
 440000 158 Arachne x1
 442500 11e Stoneman x2
-442600 1a9 Dr?Lugae x1, Balnab x1, Balnab?Z x1
+#442600 1a9 Dr?Lugae x1, Balnab x1, Balnab?Z x1
 442601 1b5 Dr?Lugae x1
 444375 09a Mad Ogre x2, Mad Ogre x2
 444375 1c4 Mad Ogre x2, Mad Ogre x2
