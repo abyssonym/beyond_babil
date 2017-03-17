@@ -1,1 +1,2 @@
 FF2_US_11       27d02a4f03e172e029c9b82ac3db79f7    tables_list.txt
+FF4_JP          5cdc56ba9f5f23e412af09f11ed47f83    tables_list_jp.txt

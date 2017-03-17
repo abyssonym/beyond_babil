@@ -1,4 +1,5 @@
-from randomtools.tablereader import TableObject, get_global_label, tblpath
+from randomtools.tablereader import (
+    TableObject, get_global_label, tblpath, addresses)
 from randomtools.utils import (
     classproperty, mutate_normal, shuffle_bits, get_snes_palette_transformer,
     write_multi, utilrandom as random)
@@ -41,7 +42,7 @@ def get_location_names():
         return LOCATION_NAMES
 
     f = open(get_outfile(), "r+b")
-    f.seek(0xa9620)
+    f.seek(addresses.location_names)
     for _ in xrange(128):
         s = ""
         while True:
@@ -77,7 +78,7 @@ def get_location_names():
 def write_location_names():
     global LOCATION_NAMES
     f = open(get_outfile(), "r+b")
-    f.seek(0xa9620)
+    f.seek(addresses.location_names)
     for number in xrange(100):
         s = ""
         for c in "{0:0>2}".format(number):
@@ -492,6 +493,9 @@ def assign_formations(cluster_groups):
         done_monsters |= set(chosen.monsters)
         new_formations.append(chosen)
     new_formations.append(FormationObject.get(0x1b7))  # Zeromus
+    zeromon1, zeromon2 = MonsterObject.get(0xc8), MonsterObject.get(0xc9)
+    assert zeromon1 in new_formations[-1].monsters
+    assert zeromon2 in new_formations[-1].monsters
     unused_formations = [f for f in formations if f not in new_formations]
     unused_formations = sorted(unused_formations, key=lambda f: f.rank)
     while len(new_formations) < 256:
@@ -516,7 +520,8 @@ def assign_formations(cluster_groups):
 
     bosses = [f for f in new_formations if f.get_bit("no_flee") and
               f.battle_music != 0]
-    zeromus = [b for b in bosses if "Zeromus" in b.signature][0]
+    zeromus = [b for b in bosses if zeromon1 in b.monsters
+               and zeromon2 in b.monsters][0]
     nonbosses = [f for f in new_formations if f not in bosses]
     bosses.remove(zeromus)
     randoms = random.sample(nonbosses, 200)
@@ -709,9 +714,9 @@ def assign_formations(cluster_groups):
             cg.boss.set_music(3)
             # set correct background for zeromus
             f = open(get_outfile(), 'r+b')
-            f.seek(0x73D)
+            f.seek(addresses.zeromus_background)
             write_multi(f, cg.boss.index, length=2)
-            f.seek(0x73D+2)
+            f.seek(addresses.zeromus_background+2)
             f.write(chr(0xD0))
             f.close()
         elif cg.boss.battle_music == 3:
@@ -728,20 +733,20 @@ def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
     if segment_lengths is None:
-        #upper limit is 155 for now
+        #upper limit is ~162 for now
         #segment_lengths = [10] + ([11] * 7) + [12]
-        #segment_lengths = [3] * 17
-        segment_lengths = ([9] * 16) + [11]
+        segment_lengths = [9] * 18
+        segment_lengths = [3] * 18
 
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
     f = open(clusterpath)
     clusters = [Cluster.from_string(line) for line in f.readlines()
-                if line.strip()]
+                if line.strip() and line[0] != '#']
     f.close()
     mapids = sorted(set([c.mapid for c in clusters]),
                     key = lambda m: (max(
-                        [len(mo.all_exits + mo.chests) for mo in
+                        [len(mo.all_exits) for mo in
                          MapObject.reverse_grid_index(m)]), m))
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
@@ -777,7 +782,10 @@ def generate_cave_layout(segment_lengths=None):
     ZEMUS_INDEX = 0x172
     lunar_whale = MapGridObject.superget(LUNAR_WHALE_INDEX)
     lunar_whale_map = lunar_whale.map
-    lunar_whale_map[10][7] = 0x7F
+    if get_global_label() == "FF2_US_11":
+        lunar_whale_map[10][7] = 0x7F
+    else:
+        lunar_whale_map[10][7] = 0x7E
     lunar_whale.overwrite_map_data(lunar_whale_map)
     zemus = MapGridObject.superget(ZEMUS_INDEX)
     zemus_map = zemus.map
@@ -794,7 +802,10 @@ def generate_cave_layout(segment_lengths=None):
                 break
         else:
             max_index = len(mapids)-1
-            choose = random.randint(random.randint(0, max_index), max_index)
+            try:
+                choose = random.randint(random.randint(0, max_index), max_index)
+            except ValueError:
+                raise Exception("Dungeon too large; not enough maps.")
             choose = mapids[choose]
             mapids.remove(choose)
         if choose >= 0x100:
@@ -803,11 +814,7 @@ def generate_cave_layout(segment_lengths=None):
                           if m.index in mapids and m.size >= size]
             priority = [m for m in MapGridObject.every
                         if m.index not in mapids + chosen + to_replace
-                        and m.size >= size]
-            priority = []
-            # TODO: exclude some protected maps
-            if not candidates and not priority:
-                continue
+                        and m.size >= size and m.index not in banned_grids]
             sort_func = lambda m: (m.size, m.index)
             candidates = (sorted(priority, key=sort_func) +
                           sorted(candidates, key=sort_func))
@@ -817,6 +824,8 @@ def generate_cave_layout(segment_lengths=None):
             candidates = [c for c in candidates
                           if MapObject.reverse_grid_index(c.index)
                           and c.index > 0]
+            if not candidates:
+                continue
             max_index = len(candidates)-1
             candchoose = random.randint(0, random.randint(0, max_index))
             candchoose = candidates[candchoose]
@@ -830,78 +839,71 @@ def generate_cave_layout(segment_lengths=None):
     assert not set(chosen) & set(special_maps)
     clusters = [c for c in clusters if c.mapid in chosen]
 
-    for _ in xrange(20):
-        cluster_groups = [ClusterGroup([]) for _2 in
-                          xrange(len(segment_lengths))]
+    cluster_groups = [ClusterGroup([]) for _2 in xrange(len(segment_lengths))]
+    for i, cg in enumerate(cluster_groups):
+        cg.index = i
+    to_assign = sorted(clusters)
+    random.shuffle(to_assign)
+    while to_assign:
+        cluster_more = []
         for i, cg in enumerate(cluster_groups):
-            cg.index = i
-        to_assign = sorted(clusters)
-        random.shuffle(to_assign)
-        while to_assign:
-            cluster_more = []
-            for i, cg in enumerate(cluster_groups):
-                if segment_lengths[i] > len(cg.mapids):
-                    cluster_more.append(cg)
-            mapid = to_assign[0].mapid
-            assign_next = [c for c in to_assign if c.mapid == mapid]
-            cg = random.choice(cluster_more)
-            for a in assign_next:
-                cg.clusters.append(a)
-                to_assign.remove(a)
+            if segment_lengths[i] > len(cg.mapids):
+                cluster_more.append(cg)
+        mapid = to_assign[0].mapid
+        assign_next = [c for c in to_assign if c.mapid == mapid]
+        cg = random.choice(cluster_more)
+        for a in assign_next:
+            cg.clusters.append(a)
+            to_assign.remove(a)
 
-        num_unhealthy = len(cluster_groups)
-        if sum(cg.health for cg in cluster_groups) < len(segment_lengths):
-            continue
+    num_unhealthy = len(cluster_groups)
+    for _2 in xrange(200):
+        num_unhealthy = len([cg for cg in cluster_groups if cg.health < 1])
+        if num_unhealthy == 0:
+            break
+        cluster_groups = sorted(cluster_groups,
+                                key=lambda cg: (cg.health, cg.index))
+        unhealthy = [cg for cg in cluster_groups if cg.health < 1]
+        healthy = [cg for cg in cluster_groups if cg.health > 1]
+        max_index = len(unhealthy)-1
+        index = random.randint(0, random.randint(0, max_index))
+        cgu = unhealthy[index]
+        max_index = len(healthy)-1
+        if max_index < 0:
+            cluster_groups = []
+            break
+        index = random.randint(random.randint(0, max_index), max_index)
+        cgh = healthy[index]
 
-        for _2 in xrange(100):
-            num_unhealthy = len([cg for cg in cluster_groups if cg.health < 1])
-            if num_unhealthy == 0:
+        unhealthy = sorted(cgu.clusters, key=lambda c: (c.health, c))
+        healthy = sorted(cgh.clusters, key=lambda c: (c.health, c))
+        max_index = len(unhealthy)-1
+        index = random.randint(0, random.randint(0, max_index))
+        aa = unhealthy[index].mapid
+        aa = [c for c in unhealthy if c.mapid == aa]
+        max_index = len(healthy)-1
+        index = random.randint(random.randint(0, max_index), max_index)
+        bb = healthy[index].mapid
+        bb = [c for c in healthy if c.mapid == bb]
+        for a in aa:
+            cgu.clusters.remove(a)
+            cgh.clusters.append(a)
+        for b in bb:
+            cgu.clusters.append(b)
+            cgh.clusters.remove(b)
+
+    for cg in cluster_groups:
+        for _2 in xrange(5):
+            try:
+                cg.full_execute()
                 break
-            cluster_groups = sorted(cluster_groups,
-                                    key=lambda cg: (cg.health, cg.index))
-            unhealthy = [cg for cg in cluster_groups if cg.health < 1]
-            healthy = [cg for cg in cluster_groups if cg.health > 1]
-            max_index = len(unhealthy)-1
-            index = random.randint(0, random.randint(0, max_index))
-            cgu = unhealthy[index]
-            max_index = len(healthy)-1
-            index = random.randint(random.randint(0, max_index), max_index)
-            cgh = healthy[index]
-
-            unhealthy = sorted(cgu.clusters, key=lambda c: (c.health, c))
-            healthy = sorted(cgh.clusters, key=lambda c: (c.health, c))
-            max_index = len(unhealthy)-1
-            index = random.randint(0, random.randint(0, max_index))
-            aa = unhealthy[index].mapid
-            aa = [c for c in unhealthy if c.mapid == aa]
-            max_index = len(healthy)-1
-            index = random.randint(random.randint(0, max_index), max_index)
-            bb = healthy[index].mapid
-            bb = [c for c in healthy if c.mapid == bb]
-            for a in aa:
-                cgu.clusters.remove(a)
-                cgh.clusters.append(a)
-            for b in bb:
-                cgu.clusters.append(b)
-                cgh.clusters.remove(b)
+            except CaveException:
+                continue
         else:
-            continue
-
-        for cg in cluster_groups:
-            for _2 in xrange(5):
-                try:
-                    cg.full_execute()
-                    break
-                except CaveException:
-                    continue
-            else:
-                cluster_groups = []
-                break
-
-        if [len(cg.mapids) for cg in cluster_groups] == segment_lengths:
+            cluster_groups = []
             break
 
-    else:
+    if [len(cg.mapids) for cg in cluster_groups] != segment_lengths:
         print "Retrying cave generation..."
         return generate_cave_layout(segment_lengths)
 
@@ -978,6 +980,8 @@ def generate_cave_layout(segment_lengths=None):
         51,                                     # town themes
         #15,                                     # misc themes
         ]
+    while len(cluster_groups) > len(bgm_candidates):
+        bgm_candidates.append(random.choice(bgm_candidates))
     bgms = random.sample(bgm_candidates, len(cluster_groups))
     for cg, bgm in zip(cluster_groups, bgms):
         cg.music = bgm
@@ -1349,16 +1353,6 @@ class AIFixObject(TableObject):
 class FormationObject(TableObject):
     def __repr__(self):
         return "%x %s" % (self.index, self.signature)
-        names = []
-        for i, t in enumerate(self.monster_types):
-            try:
-                m = MonsterNameObject.get(t)
-            except KeyError:
-                continue
-            num = (self.monster_qty >> (6 - (2*i))) & 0b11
-            names.append("%s x%s" % (m.name, num))
-        return "%x %s" % (self.index, ", ".join(names))
-        return "%x %s %s %s" % (self.index, self.rank, self.prerank, ", ".join(names))
 
     def reassign_data(self, other):
         if self is other:
@@ -1593,7 +1587,10 @@ class MonsterObject(TableObject):
 
     @property
     def name(self):
-        return MonsterNameObject.get(self.index).name
+        if get_global_label() == "FF2_US_11":
+            return MonsterNameObject.get(self.index).name
+        else:
+            return "MONSTER_%x" % self.index
 
     def get_attr_rank(self, attr):
         if attr not in MonsterObject.minmaxes:
@@ -1780,11 +1777,9 @@ class InitialSpellObject(TableObject):
 
 
 class EventObject(TableObject):
-    BASE_POINTER = 0x90200
-
     @property
     def full_event_pointer(self):
-        return self.BASE_POINTER + self.event_pointer
+        return addresses.event_base + self.event_pointer
 
     @property
     def instructions(self):
@@ -1889,8 +1884,6 @@ class NPCVisibleObject(TableObject):
 
 
 class EventCallObject(TableObject):
-    BASE_POINTER = 0x97460
-
     @property
     def size(self):
         try:
@@ -1901,7 +1894,7 @@ class EventCallObject(TableObject):
 
     @property
     def full_event_call_pointer(self):
-        return self.BASE_POINTER + self.event_call_pointer
+        return addresses.eventcall_base + self.event_call_pointer
 
     @property
     def cases(self):
@@ -2069,7 +2062,9 @@ class PlacementObject(TableObject):
 
 
 class SpeechObject(EventCallObject):
-    BASE_POINTER = 0x99c00
+    @property
+    def full_event_call_pointer(self):
+        return addresses.speech_base + self.event_call_pointer
 
 
 class ShopObject(TableObject): pass
@@ -2437,7 +2432,9 @@ class MapObject(TableObject):
 
 
 class MapGridObject(TableObject):
-    BASE_POINTER = 0xb8000
+    @property
+    def full_map_pointer(self):
+        return self.map_pointer + addresses.mapgrid_base
 
     @property
     def map(self):
@@ -2446,7 +2443,7 @@ class MapGridObject(TableObject):
 
         self._compressed = ""
         f = open(get_outfile(), "r+b")
-        f.seek(self.map_pointer + self.BASE_POINTER)
+        f.seek(self.full_map_pointer)
         data = []
         while len(data) < 1024:
             tile = ord(f.read(1))
@@ -2517,7 +2514,7 @@ class MapGridObject(TableObject):
             data = MapGridObject.recompress(data)
         assert len(data) <= self.size
         f = open(get_outfile(), "r+b")
-        f.seek(self.map_pointer + self.BASE_POINTER)
+        f.seek(self.full_map_pointer)
         f.write(data)
         f.close()
         if hasattr(self, "_map"):
@@ -2525,15 +2522,17 @@ class MapGridObject(TableObject):
 
 
 class MapGrid2Object(MapGridObject):
-    BASE_POINTER = 0xc0000
+    @property
+    def full_map_pointer(self):
+        return self.map_pointer + addresses.mapgrid2_base
 
 
-def setup_opening_event(mapid=0, x=16, y=30, running=False):
+def setup_opening_event(mapid=0, x=16, y=30):
     chosen = random.choice(range(0, 9) + [10, 13, 17])
     new_event = [
         0xFA, 0x0E,                 # play lunar whale theme
         0xE8, 0x01,                 # remove DK cecil
-        0xE7, chosen,               # random starting character
+        0xE7, chosen+1,             # random starting character
         0xE3, 0x00,                 # remove all statuses
         0xDE, 0xFE,                 # restore HP
         0xDF, 0xFE,                 # restore MP
@@ -2541,16 +2540,6 @@ def setup_opening_event(mapid=0, x=16, y=30, running=False):
         0xC6,
         0xFF,
         ]
-    if running:
-        # anything above 0 will break cutscenes with walking
-        # 3aa disables dash on map load
-        fast_level = 1
-        f = open(get_outfile(), 'r+b')
-        f.seek(0x19b9)
-        f.write("".join(map(chr, [0xA9, fast_level])))
-        f.seek(0x2668)
-        f.write("".join(map(chr, [0xA9, fast_level])))
-        f.close()
     e = EventObject.get(0x10)
     e.overwrite_event(new_event)
     child_rydia = CharacterObject.get(0x2)
@@ -2560,11 +2549,11 @@ def setup_opening_event(mapid=0, x=16, y=30, running=False):
 def setup_cave():
     # 9f338 - staff roll (japanese)
     f = open(get_outfile(), "r+b")
-    f.seek(0x9b2c)
+    f.seek(addresses.window_palette)
     write_multi(f, 0xc00, length=2)  # game window palette
     rng = range(0x100)
     random.shuffle(rng)
-    f.seek(0xa6e00)
+    f.seek(addresses.rng_table)
     f.write("".join(map(chr, rng)))  # new rng table
     f.close()
     npc_whitelist = set([])
@@ -2690,9 +2679,9 @@ def undummy():
 def lunar_ai_fix(filename=None):
     if filename is None:
         filename = get_outfile()
-    FORMATION_FLAGS_ADDR = 0xFD40
-    FUNCTION_ADDR = 0x74B
-    OVERWRITE_LIMIT = 0x775
+    FORMATION_FLAGS_ADDR = addresses.lunar_formation_flags
+    FUNCTION_ADDR = addresses.lunar_ai_function
+    OVERWRITE_LIMIT = addresses.lunar_ai_limit
 
     function_asm = [
         0xDA,                   # PHX
@@ -2752,7 +2741,8 @@ if __name__ == "__main__":
         numify = lambda x: "{0: >3}".format(x)
         minmax = lambda x: (min(x), max(x))
 
-        undummy()
+        if get_global_label() == "FF2_US_11":
+            undummy()
         lunar_ai_fix()
         setup_cave()
         clean_and_write(ALL_OBJECTS)

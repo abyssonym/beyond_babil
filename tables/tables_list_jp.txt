@@ -1,9 +1,8 @@
 # objname tablefile address count grouped
-StatusLoadObject    status_load_table.txt       669a    20
-StatusSaveObject    status_save_table.txt       671d    20
-AIFixObject         ai_fix_table.txt            7d40    64
+StatusLoadObject    status_load_table.txt       6922    20
+StatusSaveObject    status_save_table.txt       69a5    20
+AIFixObject         ai_fix_table.txt            ff40    64
 FormationObject     formation_table.txt         70000   512
-MonsterNameObject   monster_name_table.txt      71800   224
 MonsterDropObject   monster_drop_table.txt      71f00   64
 MonsterGilObject    monster_gil_table.txt       72000   224
 MonsterXPObject     monster_xp_table.txt        721c0   224
@@ -12,23 +11,11 @@ EncounterRateObject encounter_rate_table.txt    74342   384
 OverworldEncObject  encounter_table.txt         74542   84
 EncounterObject     encounter_table.txt         74596   384
 PackObject          pack_table.txt              74816   93
-#AIGroupObject       ai_group_table.txt          76030   254     delimit 255
-# ai scripts        76900   256
-# lunar scripts     736c0   90
-# condition stuff can be ignored
-# condition sets    76600   98
-# conditions        76700   128
-# condition hps     76000   24
-ItemNameObject      item_name_table.txt         78000   256
-SpellNameObject     spell_name_table.txt        78906   71
-LongSpellNameObject long_spell_name_table.txt   78ab0   120
 EquipmentObject     equipment_table.txt         79100   174
 MedicineObject      medicine_table.txt          79680   46
 PriceObject         price_table.txt             7a450   256
-CommandNameObject   command_name_table.txt      7a7c6   26
 CharacterObject     character_table.txt         7a900   16
 InitialEquipObject  initial_equip_table.txt     7ab00   20
-#LevelUpObject       level_up_table.txt          7b500   20
 LearnedSpellObject  learned_spell_table.txt     7c700   13      delimit 255
 InitialSpellObject  initial_spell_table.txt     7c8c0   13      delimit 255
 EventObject         event_table.txt             90000   256
@@ -40,19 +27,18 @@ SpeechObject        event_call_table.txt        99800   512
 ShopObject          shop_table.txt              9a300   33
 CommandObject       command_table.txt           9fd55   22
 MenuCommandObject   menu_command_table.txt      9fddd   16
-# 16 tilesets 128 tiles each
 TileObject          tile_table.txt              a0e00   2048
-TriggerObject       trigger_table.txt           a8000   384     pointed a8300 2
+TriggerObject       trigger_table.txt           a8200   384     pointed a8500 2
 MapObject           map_table.txt               a9c84   384
 MapGridObject       map_grid_table.txt          b8000   256
 MapGrid2Object      map_grid_table.txt          b8200   128
-$zeromus_background     73d
-$lunar_ai_function      74b
-$lunar_ai_limit         775
-$lunar_formation_flags  fd40
-$window_palette         9b2c
+$zeromus_background     95d
+$lunar_ai_function      96b
+$lunar_ai_limit         993
+$lunar_formation_flags  1ff40
+$window_palette         9b26
 $rng_table              a6e00
-$location_names         a9620
+$location_names         a9880
 $event_base             90200
 $eventcall_base         97460
 $speech_base            99c00
