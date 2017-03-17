@@ -238,6 +238,10 @@ class ClusterExit(ReprSortMixin):
         return self.cluster.mapid
 
     @property
+    def canonical_mapid(self):
+        return MapObject.reverse_grid_index_canonical(self.mapid).index
+
+    @property
     def cluster_group(self):
         return self.cluster.cluster_group
 
@@ -293,6 +297,10 @@ class Cluster(ReprSortMixin):
         return "{0:0>3} -- ".format("%x" % self.mapid) + ", ".join(
             [str(x) for x in sorted(self.exits)])
 
+    @property
+    def canonical_mapid(self):
+        return MapObject.reverse_grid_index_canonical(self.mapid).index
+
     @staticmethod
     def from_string(s):
         mapid, exits = s.split(":")
@@ -338,6 +346,10 @@ class ClusterGroup:
     @property
     def mapids(self):
         return set([c.mapid for c in self.clusters])
+
+    @property
+    def canonical_mapids(self):
+        return set([c.canonical_mapid for c in self.clusters])
 
     @property
     def ranked_mapids(self):
@@ -1122,7 +1134,7 @@ def generate_cave_layout(segment_lengths=None):
         u.neutralize()
     used_events = set([e for m in MapObject.every for e in m.events])
     banned_events = set([e for e in EventObject.every if e.index in
-                         [0x76, 0x77, 0x78]])
+                         [0x76, 0x77, 0x78, 0x86, 0x87]])
     used_events |= banned_events
     unused_events = [e for e in EventObject.every if e not in used_events]
     unused_events = sorted(unused_events, key=lambda e: (e.size, e.index))
@@ -1437,6 +1449,7 @@ def generate_cave_layout(segment_lengths=None):
     return cluster_groups, lungs
 
 
+class SoloBattleObject(TableObject): pass
 class StatusLoadObject(TableObject): pass
 class StatusSaveObject(TableObject): pass
 
@@ -2172,6 +2185,7 @@ class SpeechObject(EventCallObject):
 class ShopObject(TableObject): pass
 class CommandObject(TableObject): pass
 class MenuCommandObject(TableObject): pass
+class AutoBattleObject(TableObject): pass
 class TileObject(TableObject): pass
 
 
@@ -2639,6 +2653,7 @@ def setup_opening_event(mapid=0, x=16, y=30):
         0xDE, 0xFE,                 # restore HP
         0xDF, 0xFE,                 # restore MP
         0xFE, mapid, x, y, 0x00,    # load map 0 16,30
+        0xFD, 0x1D,                 # pop warp stack
         0xC6,
         0xFF,
         ]
@@ -2706,8 +2721,8 @@ def setup_cave():
     PlacementObject.canonical_zero = available_placements[0]
     for m in MapObject.every:
         m.set_bit("magnetic", False)
-        m.set_bit("exitable", False)
-        m.set_bit("warpable", False)
+        m.set_bit("exitable", True)
+        m.set_bit("warpable", True)
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
         EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
@@ -2731,7 +2746,17 @@ def setup_cave():
         i.groupindex = -1
 
     cluster_groups, lungs = generate_cave_layout()
+    for cg in cluster_groups:
+        for mapid in sorted(cg.canonical_mapids):
+            MapObject.get(mapid).set_bit("warpable", True)
+
+    for s in SoloBattleObject.every:
+        s.formation = 0xFFFF
+    for a in AutoBattleObject.every:
+        a.formation = 0xFFFF
+
     mapid, x, y = cluster_groups[0].home
+    MapObject.get(mapid).set_bit("exitable", False)
     setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
 
@@ -2832,12 +2857,12 @@ def duplicate_learning_fix():
         0x5A,                   # PHY
         0xDA,                   # PHX
         0xA6, 0xE3,             # LDX $E3
-        0xA0, 0x00, 0x00,       # LDY #$00
+        0xA0, 0x00, 0x00,       # LDY #$0000
         0xDD, 0x60, 0x15,       # CMP $1560,X
         0xF0, 0x0C,             # BEQ +12
         0xE8,                   # INX
         0xC8,                   # INY
-        0xC0, 0x18, 0x00,       # CPY #$18 (size of spell list)
+        0xC0, 0x18, 0x00,       # CPY #$0018 (size of spell list)
         0xD0, 0xF4,             # BNE -10
         0xFA,                   # PLX
         0x9D, 0x60, 0x15,       # STA $1560,X
@@ -2854,6 +2879,43 @@ def duplicate_learning_fix():
     call_asm = [0x20, FUNCTION_ADDR & 0xFF, (FUNCTION_ADDR >> 8) & 0xFF]
     f.seek(CALL_ADDR)
     f.write("".join(map(chr, call_asm)))
+    f.close()
+
+
+def warp_fix():
+    STACK_HEIGHT = 50
+    SH3 = (STACK_HEIGHT)*3
+    queue_stack = [
+        0xA2, 0x00, 0x00,       # LDX #$0000
+        0xBD, 0x31, 0x17,       # LDA $1731,X
+        0x9D, 0x2E, 0x17,       # STA $172E,X
+        0xE8,                   # INX
+        0xE0, SH3-3, 0x00,      # CPX #$----
+        0xD0, 0xF4,             # BNE -10
+        ]
+    stack_asm = [
+        0xE0, SH3,  0x00,       # CPX #$----
+        0x90, len(queue_stack), # BCC +X
+        ] + queue_stack + [
+        0xAD, 0x02, 0x17,       # LDA $1702
+        0x9D, 0x2E, 0x17,       # STA $172E,X
+        0xAD, 0x06, 0x17,       # LDA $1706
+        0x09, 0x80,             # ORA #$80
+        0x9D, 0x2F, 0x17,       # STA $172F,X
+        0xAD, 0x07, 0x17,       # LDA $1707
+        0x9D, 0x30, 0x17,       # STA $1730,X
+        0xE8,                   # INX
+        0xE8,                   # INX
+        0xE8,                   # INX
+        0x8E, 0x2C, 0x17,       # STX $172C
+        ]
+    length = addresses.warp_fix_limit - addresses.warp_fix_start
+    while len(stack_asm) < length:
+        stack_asm.append(0xEA)
+    assert len(stack_asm) <= length
+    f = open(get_outfile(), "r+b")
+    f.seek(addresses.warp_fix_start)
+    f.write("".join(map(chr, stack_asm)))
     f.close()
 
 
@@ -2879,6 +2941,7 @@ if __name__ == "__main__":
             undummy()
         lunar_ai_fix()
         duplicate_learning_fix()
+        warp_fix()
         setup_cave()
         clean_and_write(ALL_OBJECTS)
         write_credits()

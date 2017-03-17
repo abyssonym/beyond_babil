@@ -1,4 +1,5 @@
 # objname tablefile address count grouped
+SoloBattleObject    solo_battle_table.txt       679e    13
 StatusLoadObject    status_load_table.txt       6922    20
 StatusSaveObject    status_save_table.txt       69a5    20
 AIFixObject         ai_fix_table.txt            ff40    64
@@ -27,6 +28,7 @@ SpeechObject        event_call_table.txt        99800   512
 ShopObject          shop_table.txt              9a300   33
 CommandObject       command_table.txt           9fd55   22
 MenuCommandObject   menu_command_table.txt      9fddd   16
+AutoBattleObject    solo_battle_table.txt       9fe0d   8
 TileObject          tile_table.txt              a0e00   2048
 TriggerObject       trigger_table.txt           a8200   384     pointed a8500 2
 MapObject           map_table.txt               a9c84   384
@@ -49,3 +51,5 @@ $staff_roll             9f336
 $staff_roll_limit       9f8ff
 $dup_learn_function     1f215
 $dup_learn_call         1f17d
+$warp_fix_start         1cef
+$warp_fix_limit         1d32
