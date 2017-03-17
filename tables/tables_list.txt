@@ -59,3 +59,5 @@ $eventcall_base         97460
 $speech_base            99c00
 $mapgrid_base           b8000
 $mapgrid2_base          c0000
+$staff_roll             9f36d
+$staff_roll_limit       9f8ff

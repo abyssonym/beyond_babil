@@ -37,6 +37,100 @@ def text_to_bytestr(text):
     return bytestr
 
 
+def read_credits():
+    # max line width: 32 characters
+    f = open(get_outfile(), "r+b")
+    f.seek(addresses.staff_roll)
+    s = ""
+    while True:
+        val = f.read(1)
+        if ord(val) == 2:
+            s += (" " * ord(f.read(1)))
+            continue
+        if ord(val) == 0xa:
+            s += "."
+            continue
+        if ord(val) == 1:
+            s += "\n"
+            continue
+        if ord(val) == 0:
+            break
+        c = bytestr_to_text(val)
+        s += c
+    print s
+    print hex(f.tell())
+    f.close()
+
+
+def write_credits():
+    creditspath = path.join(tblpath, "credits.txt")
+    names = open(creditspath).readlines()
+    names = [n.strip() for n in names if n.strip()]
+
+    def center(s):
+        width = len(s)
+        margin = (32-width) / 2
+        assert margin >= 0
+        return (" " * margin) + s
+
+    def to_bytestr(s):
+        s = s.replace("_", " ")
+        bytestr = ""
+        while s:
+            if s.startswith("   "):
+                s2 = s.lstrip(" ")
+                diff = len(s) - len(s2)
+                bytestr += chr(0x2)
+                bytestr += chr(diff)
+                s = s2
+            elif s[0] == '.':
+                bytestr += chr(0xa)
+                s = s[1:]
+            elif s[0] == '\n':
+                bytestr += chr(0x1)
+                s = s[1:]
+            else:
+                bytestr += text_to_bytestr(s[0])
+                s = s[1:]
+        return bytestr
+
+    def center_to_bytestr(s):
+        if s[0] == "\n":
+            return to_bytestr(s)
+        else:
+            return to_bytestr(center(s))
+
+    start = addresses.staff_roll
+    finish = addresses.staff_roll_limit
+    length = finish - start
+    beginning = "".join(map(center_to_bytestr, [
+        "FINAL FANTASY IV\n",
+        "BABEL RANDOMIZER\n",
+        "%s SEED %s\n\n\n" % (get_global_label(), get_seed()),
+        "SPECIAL THANKS TO\n\n",
+        ]))
+    ending = "".join(map(center_to_bytestr, [
+        "\n\n",
+        "...AND YOU."
+        ])) + chr(0)
+    roll = ""
+    while True:
+        max_index = len(names)-1
+        index = random.randint(0, random.randint(0, max_index))
+        name = names[index]
+        names.remove(name)
+        assert len(name) <= 32
+        name = center_to_bytestr(name + "\n")
+        if len(beginning + roll + name + ending) > length:
+            break
+        roll += name
+
+    f = open(get_outfile(), "r+b")
+    f.seek(start)
+    f.write(beginning + roll + ending)
+    f.close()
+
+
 def get_location_names():
     if LOCATION_NAMES:
         return LOCATION_NAMES
@@ -2555,7 +2649,6 @@ def setup_opening_event(mapid=0, x=16, y=30):
 
 
 def setup_cave():
-    # 9f338 - staff roll (japanese)
     f = open(get_outfile(), "r+b")
     f.seek(addresses.window_palette)
     write_multi(f, 0xc00, length=2)  # game window palette
@@ -2754,6 +2847,7 @@ if __name__ == "__main__":
         lunar_ai_fix()
         setup_cave()
         clean_and_write(ALL_OBJECTS)
+        write_credits()
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
     except IOError, e:
