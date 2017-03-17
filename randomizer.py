@@ -718,6 +718,8 @@ def assign_formations(cluster_groups):
             write_multi(f, cg.boss.index, length=2)
             f.seek(addresses.zeromus_background+2)
             f.write(chr(0xD0))
+            f.seek(addresses.zeromus_death)
+            write_multi(f, cg.boss.index, length=2)
             f.close()
         elif cg.boss.battle_music == 3:
             if cgi > len(cluster_groups) / 2:
@@ -1588,9 +1590,8 @@ class MonsterObject(TableObject):
     def __repr__(self):
         return "%s %s %s" % ("{0:0>2}".format("%x" % self.index), int(round(self.rank)), self.name)
 
-    @classmethod
-    def write_all(cls, filename):
-        pass
+    def write_data(self, filename=None, pointer=None):
+        return super(MonsterObject, self).write_data(filename, self.pointer)
 
     @property
     def name(self):

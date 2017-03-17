@@ -47,6 +47,7 @@ MapObject           map_table.txt               a9c84   384
 MapGridObject       map_grid_table.txt          b8000   256
 MapGrid2Object      map_grid_table.txt          b8200   128
 $zeromus_background     73d
+$zeromus_death          16947
 $lunar_ai_function      74b
 $lunar_ai_limit         775
 $lunar_formation_flags  fd40
