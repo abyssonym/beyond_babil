@@ -47,3 +47,5 @@ $mapgrid_base           b8000
 $mapgrid2_base          c0000
 $staff_roll             9f336
 $staff_roll_limit       9f8ff
+$dup_learn_function     1f215
+$dup_learn_call         1f17d

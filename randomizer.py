@@ -2824,6 +2824,39 @@ def lunar_ai_fix(filename=None):
         f.is_lunar_ai_formation
 
 
+def duplicate_learning_fix():
+    FUNCTION_ADDR = addresses.dup_learn_function
+    CALL_ADDR = addresses.dup_learn_call
+
+    function_asm = [
+        0x5A,                   # PHY
+        0xDA,                   # PHX
+        0xA6, 0xE3,             # LDX $E3
+        0xA0, 0x00, 0x00,       # LDY #$00
+        0xDD, 0x60, 0x15,       # CMP $1560,X
+        0xF0, 0x0C,             # BEQ +12
+        0xE8,                   # INX
+        0xC8,                   # INY
+        0xC0, 0x18, 0x00,       # CPY #$18 (size of spell list)
+        0xD0, 0xF4,             # BNE -10
+        0xFA,                   # PLX
+        0x9D, 0x60, 0x15,       # STA $1560,X
+        0xDA,                   # PHX
+        0xFA,                   # PLX
+        0x7A,                   # PLY
+        0x60,                   # RTS
+        ]
+
+    f = open(get_outfile(), "r+b")
+    f.seek(FUNCTION_ADDR)
+    f.write("".join(map(chr, function_asm)))
+
+    call_asm = [0x20, FUNCTION_ADDR & 0xFF, (FUNCTION_ADDR >> 8) & 0xFF]
+    f.seek(CALL_ADDR)
+    f.write("".join(map(chr, call_asm)))
+    f.close()
+
+
 def unload_fusoya_spellsets():
     for ss in InitialSpellObject.getgroup(11):
         ss.groupindex = -1
@@ -2845,6 +2878,7 @@ if __name__ == "__main__":
         if get_global_label() == "FF2_US_11":
             undummy()
         lunar_ai_fix()
+        duplicate_learning_fix()
         setup_cave()
         clean_and_write(ALL_OBJECTS)
         write_credits()
