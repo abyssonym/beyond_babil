@@ -733,10 +733,10 @@ def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
     if segment_lengths is None:
-        #upper limit is ~162 for now
+        #upper limit is ~160 for now
         #segment_lengths = [10] + ([11] * 7) + [12]
-        segment_lengths = [9] * 18
-        segment_lengths = [3] * 18
+        segment_lengths = [10] * 16
+        segment_lengths = [3] * 16
 
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
@@ -1118,8 +1118,11 @@ def generate_cave_layout(segment_lengths=None):
             actor = character_actors[character]
         else:
             actor = character
-        event = [
-            0xF8, 0x7B,
+        if get_global_label() == "FF2_US_11":
+            event = [0xF8, 0x7B]
+        else:
+            event = [0xF8, 0xC0]
+        event += [
             0xE7, actor+1,
             0xFF,
             0xE8, actor+1,
@@ -1292,7 +1295,11 @@ def generate_cave_layout(segment_lengths=None):
             0xFA, LUNG_SONG,
             #0xFF,
             ]
-        yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF, 0xFF]
+
+        if get_global_label() == "FF2_US_11":
+            yesno_boss_event = [0xF8, 0x98] + boss_event + [0xFF, 0xFF]
+        else:
+            yesno_boss_event = [0xF8, 0x98, 0xFF, 0xFF] + boss_event + [0xFF]
 
         if summons:
             summon = summons.pop()
