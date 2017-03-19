@@ -16,6 +16,7 @@ import string
 VERSION = 1
 ALL_OBJECTS = None
 LOCATION_NAMES = []
+DEBUG_MODE = True
 
 textdict = {}
 reverse_textdict = {}
@@ -1694,6 +1695,28 @@ def generate_cave_layout(segment_lengths=None):
         speech = make_simple_event_call(event, npc=True)
         npc.npc_index = speech.index
         NPCSpriteObject.get(npc.npc_index).sprite = sprite
+
+    pass_shop_npc = [n for n in npcs if n.shop == 31]
+    if pass_shop_npc:
+        mapid = pass_shop_npc[0].groupindex
+        if mapid == 0x18:
+            rank = 0
+            for cg in cluster_groups:
+                for c in cg.clusters:
+                    if c.canonical_mapid == mapid:
+                        rank = cg.base_rank + c.rank
+                        break
+                if rank > 0:
+                    break
+            else:
+                raise Exception("Something went wrong with the pass.")
+            shop = ShopObject.get(31)
+            toss = random.choice(shop.items)
+            shop.items.remove(toss)
+            shop.items = [0xEC] + shop.items
+            price = ((rank/3)**3) + ((rank/2)**2) + rank
+            PriceObject.get(0xEC).set_price(price)
+
     return cluster_groups, lungs
 
 
@@ -2128,6 +2151,15 @@ class PriceObject(TableObject):
         if self.price_byte & 0x80:
             return (self.price_byte & 0x7F) * 1000
         return self.price_byte * 10
+
+    def set_price(self, price):
+        if price <= 1270:
+            price = int(round(price, -1))
+            self.price_byte = (price/10)
+        else:
+            price = int(round(price, -3))
+            assert price / 1000 <= 127
+            self.price_byte = 0x80 | (price / 1000)
 
     @property
     def banned(self):
@@ -3159,10 +3191,11 @@ def setup_cave():
         if not m.encounters:
             EncounterRateObject.get(m.index).encounter_rate = 0
             EncounterObject.get(m.index).encounter = 0
-            continue
         else:
             EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
                 [random.randint(0, 3) for _ in xrange(3)])
+        if DEBUG_MODE:
+            EncounterRateObject.get(m.index).encounter_rate = 0
 
     for s in SoloBattleObject.every:
         s.formation = 0xFFFF
@@ -3357,6 +3390,17 @@ if __name__ == "__main__":
         duplicate_learning_fix()
         warp_fix()
         setup_cave()
+
+        if DEBUG_MODE:
+            for m in MonsterObject.every:
+                m.hp = 0
+                m.attack = 0
+                m.speed_index = 0
+                m.attack_sequence_group = 0
+                MonsterXPObject.get(m.index).xp = 60000
+            for p in PriceObject.every:
+                p.set_price(10)
+
         clean_and_write(ALL_OBJECTS)
 
         write_credits()
