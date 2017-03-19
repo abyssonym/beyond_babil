@@ -396,8 +396,8 @@
 1890000 183 RedGiant x1
 1925000 143 Molbol x3
 1937500 196 PinkPuff x3, PinkPuff x2
-2000000 1b0 Asura x1
-2000001 0ff Rubicant x1
+2000000 0ff Rubicant x1
+2000001 1b0 Asura x1
 2100000 194 Tricker x1
 2100000 195 Tricker x1
 2230000 0b8 Searcher x1, Machine x1
@@ -409,8 +409,7 @@
 2537500 0b9 Searcher x1, Machine x1, Machine x2
 2622500 0bc Searcher x1, Horseman x1, Machine x2
 2712500 182 Warlock x1, Kary x2
-2800000 1ad Leviatan x1
-2800001 0fb Odin x1
+2800000 0fb Odin x1
 2835000 185 RedGiant x2
 2835000 1eb RedGiant x2
 3000000 192 King?Ryu x1
@@ -437,6 +436,7 @@
 3770002 15d TrapDoor x1, Mantcore x1
 3770003 16c Mantcore x2
 3770004 1af EvilWall x1
+3770005 1ad Leviatan x1
 4000000 18d FatalEye x1
 4010000 0c2 Searcher x1, MacGiant x1
 4150000 0c7 D?Machin x1
