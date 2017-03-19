@@ -1045,6 +1045,7 @@ def assign_treasure(cluster_groups):
             s.items = sorted([i.index for i in items])
             continue
 
+        candidates = [c for c in candidates if c.buyable]
         equip_indexes = set([])
         for c in candidates:
             e = EquipmentObject.get(c.index)
@@ -1426,22 +1427,41 @@ def generate_cave_layout(segment_lengths=None):
                                 if p not in used_placement_indexes]
     unused_flags = range(88, 0xFE)
     unused_flags.remove(225)
+    used_speeches = set([s for s in used_speeches if s.index < 0x100])
 
-    def make_simple_event_call(event, npc=False):
+    def make_simple_event_call(event, npc=False, sprite=None):
         if npc:
-            uecs = unused_speeches
+            unecs = unused_speeches
+            uecs = used_speeches
         else:
-            uecs = unused_event_calls
-        candidate_events = [e for e in unused_events if e.size >= len(event)]
-        chosen = candidate_events.pop(0)
-        unused_events.remove(chosen)
-        chosen.overwrite_event(event)
+            unecs = unused_event_calls
+            uecs = used_event_calls
+        for e in sorted(used_events):
+            if e.data == event:
+                chosen = e
+                break
+        else:
+            candidate_events = [e for e in unused_events
+                                if e.size >= len(event)]
+            chosen = candidate_events.pop(0)
+            unused_events.remove(chosen)
+            used_events.add(chosen)
+            chosen.overwrite_event(event)
         cases = [([], chosen.index)]
-        size = len(EventCallObject.cases_to_bytecode(cases))
-        candidate_event_calls = [e for e in uecs if e.size >= size]
+        bytecode = EventCallObject.cases_to_bytecode(cases)
+        size = len(bytecode)
+        for uec in sorted(uecs):
+            if uec.bytecode == bytecode:
+                if ((not npc) or
+                        NPCSpriteObject.get(uec.index).sprite == sprite):
+                    if npc:
+                        import pdb; pdb.set_trace()
+                    return uec
+        candidate_event_calls = [e for e in unecs if e.size >= size]
         event_call = candidate_event_calls.pop(0)
         event_call.overwrite_event_call(cases)
-        uecs.remove(event_call)
+        unecs.remove(event_call)
+        uecs.add(event_call)
         return event_call
 
     start = cluster_groups[0].start
@@ -1751,7 +1771,7 @@ def generate_cave_layout(segment_lengths=None):
             0xFF,
             ]
         sprite = NPCSpriteObject.get(npc.npc_index).sprite
-        speech = make_simple_event_call(event, npc=True)
+        speech = make_simple_event_call(event, npc=True, sprite=sprite)
         npc.npc_index = speech.index
         NPCSpriteObject.get(npc.npc_index).sprite = sprite
 
@@ -2350,8 +2370,18 @@ class EventObject(TableObject):
             self._instructions.append((cmd, parameters))
             if cmd == 0xFF:
                 break
+        self._data = []
+        for cmd, parameters in self._instructions:
+            self._data += [cmd] + parameters
         f.close()
         return self.instructions
+
+    @property
+    def data(self):
+        if hasattr(self, "_data"):
+            return self._data
+        self.instructions
+        return self.data
 
     @property
     def pretty_script(self):
@@ -2480,6 +2510,10 @@ class EventCallObject(TableObject):
             if call in crash_game:
                 return True
         return False
+
+    @property
+    def bytecode(self):
+        return EventCallObject.cases_to_bytecode(self.cases)
 
     @staticmethod
     def cases_to_bytecode(cases):
@@ -3054,6 +3088,15 @@ class MapObject(TableObject):
         for p in other.npc_placements:
             p.groupindex = -1
         self.npc_placement_index = PlacementObject.canonical_zero
+        '''
+        if len(other.npc_placements) == 0:
+            self.npc_placement_index = PlacementObject.canonical_zero
+        else:
+            self.npc_placement_index = PlacementObject.available_placements[0]
+            for p in other.npc_placements:
+                p.groupindex = self.npc_placement_index
+        '''
+        assert len(self.npc_placements) <= 12
         self.acquire_triggers(other)
 
     def acquire_triggers(self, other):
@@ -3313,19 +3356,19 @@ def setup_cave(segment_lengths):
     reseed()
     cluster_groups, lungs = generate_cave_layout(segment_lengths)
     reseed()
+    for m in MapObject.every:
+        EncounterRateObject.get(m.index).encounter_rate = 0
+        if not m.encounters:
+            EncounterObject.get(m.index).encounter = 0
+
     for cg in cluster_groups:
         for mapid in sorted(cg.canonical_mapids):
-            MapObject.get(mapid).set_bit("warpable", True)
-
-    for m in MapObject.every:
-        if not m.encounters:
-            EncounterRateObject.get(m.index).encounter_rate = 0
-            EncounterObject.get(m.index).encounter = 0
-        else:
-            EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
-                [random.randint(0, 3) for _ in xrange(3)])
-        if DEBUG_MODE:
-            EncounterRateObject.get(m.index).encounter_rate = 0
+            m = MapObject.get(mapid)
+            m.set_bit("warpable", True)
+            m.set_bit("exitable", True)
+            if m.encounters and not DEBUG_MODE:
+                EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
+                    [random.randint(0, 3) for _ in xrange(3)])
 
     for s in SoloBattleObject.every:
         s.formation = 0xFFFF
@@ -3333,7 +3376,8 @@ def setup_cave(segment_lengths):
         a.formation = 0xFFFF
 
     mapid, x, y = cluster_groups[0].home
-    MapObject.get(mapid).set_bit("exitable", False)
+    lunar_whale = MapObject.get(mapid)
+    lunar_whale.set_bit("exitable", False)
     reseed()
     chosen = setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
