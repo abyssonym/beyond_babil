@@ -354,6 +354,11 @@ class ClusterGroup:
         return set([c.mapid for c in self.clusters])
 
     @property
+    def encounter_mapids(self):
+        return set([c.mapid for c in self.clusters
+                    if MapObject.get(c.canonical_mapid).encounters])
+
+    @property
     def canonical_mapids(self):
         return set([c.canonical_mapid for c in self.clusters])
 
@@ -373,6 +378,10 @@ class ClusterGroup:
             if c.mapid not in mapids:
                 mapids.append(c.mapid)
         return mapids
+
+    @property
+    def ranked_encounter_mapids(self):
+        return [m for m in self.ranked_mapids if m in self.encounter_mapids]
 
     @property
     def health(self):
@@ -707,8 +716,8 @@ def assign_formations(cluster_groups):
     packids = range(max_pack+1)
     pack_assignments = defaultdict(set)
     for i, cg in enumerate(cluster_groups):
-        portion = len(cg.mapids) / float(sum(
-            [len(cg2.mapids) for cg2 in cluster_groups[i:]]))
+        portion = len(cg.encounter_mapids) / float(sum(
+            [len(cg2.encounter_mapids) for cg2 in cluster_groups[i:]]))
         num_packs = int(round(portion * len(packids)))
         num_packs = max(num_packs, 1)
         for p in packids[:num_packs]:
@@ -811,7 +820,7 @@ def assign_formations(cluster_groups):
 
     for cgi, cg in enumerate(cluster_groups):
         packs = sorted(pack_assignments[cgi])
-        mapids = list(cg.ranked_mapids)
+        mapids = list(cg.ranked_encounter_mapids)
         if len(packs) > len(mapids):
             packs = sorted(random.sample(packs, len(mapids)))
         max_pack = len(packs)-1
@@ -1057,7 +1066,7 @@ def generate_cave_layout(segment_lengths=None):
         #upper limit is ~160 for now
         #segment_lengths = [10] + ([11] * 7) + [12]
         segment_lengths = [10] * 16
-        segment_lengths = [3] * 16
+        #segment_lengths = [3] * 16
 
     clusterpath = path.join(tblpath, "clusters.txt")
     bannedgridpath = path.join(tblpath, "banned_grids.txt")
@@ -1065,10 +1074,10 @@ def generate_cave_layout(segment_lengths=None):
     clusters = [Cluster.from_string(line) for line in f.readlines()
                 if line.strip() and line[0] != '#']
     f.close()
-    mapids = sorted(set([c.mapid for c in clusters]),
-                    key = lambda m: (max(
-                        [(len(mo.all_exits), len(mo.chests)) for mo in
-                         MapObject.reverse_grid_index(m)]), m))
+    mapids = sorted(
+        set([c.mapid for c in clusters]), key=lambda m: (max(
+        [(mo.get_cluster_health(clusters), mo.index) for mo in
+         MapObject.reverse_grid_index(m)]), m))
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
                         if line.strip()])
@@ -1354,12 +1363,13 @@ def generate_cave_layout(segment_lengths=None):
     unused_events = sorted(unused_events, key=lambda e: (e.size, e.index))
     used_event_calls = set([e for m in MapObject.every for e in m.event_calls])
     unused_event_calls = [e for e in EventCallObject.every
-                          if e not in used_event_calls]
+                          if e not in used_event_calls
+                          and 0 <= e.index < 0x100]
     unused_event_calls = sorted(unused_event_calls,
                                 key=lambda e: (e.size, e.index))
     used_speeches = set([e for m in MapObject.every for e in m.speeches])
     unused_speeches = [e for e in SpeechObject.every if e not in used_speeches
-                       and e.index > 0]
+                       and 0 < e.index < 0x100]
     used_placement_indexes = set([m.npc_placement_index
                                   for m in MapObject.every])
     unused_placement_indexes = [p for p in range(0xFE)
@@ -1368,16 +1378,20 @@ def generate_cave_layout(segment_lengths=None):
     unused_flags.remove(225)
 
     def make_simple_event_call(event, npc=False):
+        if npc:
+            uecs = unused_speeches
+        else:
+            uecs = unused_event_calls
         candidate_events = [e for e in unused_events if e.size >= len(event)]
         chosen = candidate_events.pop(0)
         unused_events.remove(chosen)
         chosen.overwrite_event(event)
         cases = [([], chosen.index)]
         size = len(EventCallObject.cases_to_bytecode(cases))
-        candidate_event_calls = [e for e in unused_event_calls if e.size >= size]
+        candidate_event_calls = [e for e in uecs if e.size >= size]
         event_call = candidate_event_calls.pop(0)
         event_call.overwrite_event_call(cases)
-        unused_event_calls.remove(event_call)
+        uecs.remove(event_call)
         return event_call
 
     start = cluster_groups[0].start
@@ -1661,6 +1675,25 @@ def generate_cave_layout(segment_lengths=None):
             mapid=lung.index, x=15, y=15,
             misc1=0xFF, misc2=event_call.index, misc3=0)
 
+    npcs = [n for cg in cluster_groups for m in cg.maps
+            for n in m.npc_placements]
+    npcs = sorted(set(npcs))
+    done_shops = set([n.shop for n in npcs if n.shop is not None])
+    potential_shops = [n for n in npcs if n.potential_shop]
+    random.shuffle(potential_shops)
+    todo_shops = [s for s in ShopObject.every if s.index not in done_shops]
+    random.shuffle(todo_shops)
+    for npc, shop in zip(potential_shops, todo_shops):
+        if not unused_events and unused_speeches:
+            break
+        event = [
+            0xED, shop.index,
+            0xFF,
+            ]
+        sprite = NPCSpriteObject.get(npc.npc_index).sprite
+        speech = make_simple_event_call(event, npc=True)
+        npc.npc_index = speech.index
+        NPCSpriteObject.get(npc.npc_index).sprite = sprite
     return cluster_groups, lungs
 
 
@@ -2472,15 +2505,30 @@ class PlacementObject(TableObject):
         return any([e.messager for e in self.events])
 
     @property
-    def blocker(self):
-        if self.get_bit("walks"):
-            return False
+    def loiterer(self):
         if not self.events:
             return True
         for e in self.events:
             if not set(e.commands) - set([0xF1, 0xF0, 0xEF, 0xEE, 0xF6, 0xFF]):
                 return True
         return False
+
+    @property
+    def blocker(self):
+        return self.loiterer and not self.get_bit("walks")
+
+    @property
+    def potential_shop(self):
+        return self.loiterer and self.get_bit("walks")
+
+    @property
+    def shop(self):
+        for e in self.events:
+            for command, parameters in e.instructions:
+                if command == 0xED:
+                    assert len(parameters) == 1
+                    return parameters[0]
+        return None
 
 
 class SpeechObject(EventCallObject):
@@ -2639,6 +2687,26 @@ class MapObject(TableObject):
             s += "WARP ?????\n"
         return s.strip()
 
+    def get_cluster_health(self, clusters):
+        if hasattr(self, "_cluster_health"):
+            return self._cluster_health
+        num_clusters = len([c for c in clusters
+                            if c.mapid == self.mapgrid.index])
+        if self.index < 0x100:
+            a, b = len(self.all_exits), len(self.chests + self.npc_placements)
+        else:
+            a, b = len(self.all_exits), len(self.chests)
+        a -= (num_clusters-1)
+        if self.save_point:
+            b += 1
+        b += len([t for t in self.event_triggers if t.misc2 != 2])
+        self._cluster_health = a, b
+        return self.get_cluster_health(None)
+
+    @property
+    def encounters(self):
+        return not self.opens_door
+
     @property
     def encounter_rate(self):
         return EncounterRateObject.get(self.index).encounter_rate
@@ -2740,6 +2808,16 @@ class MapObject(TableObject):
         return warps
 
     @property
+    def save_point(self):
+        for y in xrange(32):
+            for x in xrange(32):
+                tile = self.map[y][x]
+                tile = TileObject.get((128*self.tileset_index)+tile)
+                if tile.get_bit("save_point"):
+                    return True
+        return False
+
+    @property
     def triggers(self):
         return TriggerObject.getgroup(self.index)
 
@@ -2758,6 +2836,14 @@ class MapObject(TableObject):
     @property
     def event_triggers(self):
         return [e for e in self.triggers if e.is_event]
+
+    @property
+    def opens_door(self):
+        for e in self.events:
+            for cmd in e.commands:
+                if cmd == 0xD5:
+                    return True
+        return False
 
     @property
     def events(self):
@@ -3046,8 +3132,6 @@ def setup_cave():
         m.set_bit("warpable", True)
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
-        EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
-            [random.randint(0, 3) for _ in xrange(3)])
 
     for i in InitialEquipObject.every:
         for attr, _, _ in InitialEquipObject.specsattrs:
@@ -3070,6 +3154,15 @@ def setup_cave():
     for cg in cluster_groups:
         for mapid in sorted(cg.canonical_mapids):
             MapObject.get(mapid).set_bit("warpable", True)
+
+    for m in MapObject.every:
+        if not m.encounters:
+            EncounterRateObject.get(m.index).encounter_rate = 0
+            EncounterObject.get(m.index).encounter = 0
+            continue
+        else:
+            EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
+                [random.randint(0, 3) for _ in xrange(3)])
 
     for s in SoloBattleObject.every:
         s.formation = 0xFFFF
