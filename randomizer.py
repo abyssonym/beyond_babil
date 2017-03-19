@@ -1265,26 +1265,50 @@ def generate_cave_layout(segment_lengths=None):
     active_clusters = sorted(set([c for cg in cluster_groups
                                   for c in cg.clusters]))
     active_maps = sorted(set([c.mapid for c in active_clusters]))
+    used_backgrounds = set(
+        [MapObject.reverse_grid_index_canonical(mapid).background
+         for mapid in active_maps if mapid not in replace_dict])
+    used_grids = (set(replace_dict.values()) | set(active_maps) | banned_grids
+                  | used_backgrounds)
+    unused_grids = [g for g in xrange(0x100) if g not in used_grids]
+
+    def background_check(a):
+        if a.grid_index in to_replace:
+            background = MapGrid2Object.get(a.background)
+            replacements = [m for m in MapGridObject.every
+                            if m.map == background.map]
+            if len(replacements) > 1:
+                replacements = [r for r in replacements if any(
+                    [m.background == r.index and m.background != m.index
+                     for m in MapObject.every])]
+            if len(replacements) > 1:
+                replacements = [r for r in replacements if not r.glitched]
+            if replacements:
+                assert len(replacements) == 1
+                a.background = replacements[0].index
+            else:
+                g = MapGrid2Object.get(a.background)
+                candidates = [m for m in MapGridObject.every
+                              if m.index in unused_grids
+                              and m.size >= g.size]
+                if candidates:
+                    candidates = sorted(candidates,
+                                        key=lambda m: (m.size, m.index))
+                    chosen = candidates[0]
+                    chosen.overwrite_map_data(g)
+                    assert chosen.map == background.map
+                    a.background = chosen.index
+                    unused_grids.remove(chosen.index)
+                else:
+                    a.background = a.grid_index
+                    a.bg_properties = 0x86
+
     for mapid in active_maps:
         assert mapid < 0x100
         aa = MapObject.reverse_grid_index(mapid)
         a = MapObject.reverse_grid_index_canonical(mapid)
-        if a.grid_index in to_replace:
-            companions = [c for c in MapObject.every
-                          if c.grid_index not in banned_grids
-                          and c.grid_index not in to_replace
-                          and c.grid_index in mapids
-                          and c.index <= 0x100
-                          and c.tileset_index == a.tileset_index
-                          and c.grid_index != c.background]
-            if companions:
-                companions = [c.background for c in companions]
-                chosen, _ = Counter(companions).most_common()[0]
-                a.background = chosen
-            else:
-                a.background = a.grid_index
-                a.bg_properties = 0x86
         for a2 in aa:
+            background_check(a)
             if a2 is not a:
                 a.acquire_triggers(a2)
                 a2.neutralize()
@@ -1329,14 +1353,14 @@ def generate_cave_layout(segment_lengths=None):
 
     lunar_whale = MapObject.reverse_grid_index_canonical(
         replace_dict[LUNAR_WHALE_INDEX])
+    background_check(lunar_whale)
     for m in MapObject.every:
         if m.grid_index not in active_maps and m != lunar_whale:
             for t in m.triggers:
                 t.groupindex = -1
 
     zemus = MapObject.reverse_grid_index_canonical(replace_dict[ZEMUS_INDEX])
-    zemus.background = zemus.index
-    zemus.bg_properties = 0x86
+    background_check(zemus)
     zemus.name_index = 100
     zemus.music = 11
     lunar_whale.music = 14
@@ -2992,6 +3016,17 @@ class MapGridObject(TableObject):
         return self.map_pointer + addresses.mapgrid_base
 
     @property
+    def glitched(self):
+        try:
+            m2 = MapGridObject.superget(self.index+1)
+            space = m2.full_map_pointer - self.full_map_pointer
+            if space < len(self.compressed):
+                return True
+        except KeyError:
+            pass
+        return False
+
+    @property
     def map(self):
         if hasattr(self, "_map"):
             return self._map
@@ -3024,6 +3059,8 @@ class MapGridObject(TableObject):
 
     @property
     def size(self):
+        if self.glitched and not isinstance(self, MapGrid2Object):
+            return 0
         return len(self.compressed)
 
     @property
