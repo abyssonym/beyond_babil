@@ -1,0 +1,54 @@
+Final Fantasy 4 "Beyond Babil" Randomizer
+Version:    1
+Date:       March 19, 2017
+URL:        https://github.com/abyssonym/beyond_babil
+Contact:    https://twitter.com/abyssonym
+            https://www.twitch.tv/abyssonym
+
+--- ABOUT ---
+    Beyond Babil is an ANCIENT CAVE type randomizer, which means that it removes all story elements from the game and turns it into a pure hack 'n slash dungeon crawler. The goal is to make it to the last floor and defeat the boss there.
+
+--- TIPS ---
+    -You can recruit or dismiss characters on the Lunar Whale. Use the save point before changing your party.
+    -Don't dismiss the last character in your party (it will softlock the game).
+    -You can have duplicate characters in the same party.
+    -Make sure your party has a way to deal with Valvalis and Asura.
+    -Tellah and Rydia will learn new spells after every checkpoint.
+    -Warp and Exit work as expected and should both be bug-free.
+    -If you encounter a boss as a random encounter, it is possible to run away.
+    -If an NPC is blocking an entrance, just walk through them.
+    -Some NPCs will sell you items if you talk to them.
+
+--- HOW TO USE ---
+Running the randomizer:
+    Windows users may use the executable file, "ff5gc.exe". Other users, please run "randomizer.py" using Python version 2.7.
+
+Source rom file:
+    This randomizer requires either the NA Final Fantasy II (v1.1) or JP Final Fantasy IV rom. Only the SNES and SFC versions are supported. FF4 Easytype is not supported. Note that due to the large number of differences between FF2 NA and FF4 JP, there may be some differences between the resulting randomizations. The supported (unheadered) rom versions have the following MD5 hashes:
+    MD5 - 27d02a4f03e172e029c9b82ac3db79f7 (FF2 US)
+          5cdc56ba9f5f23e412af09f11ed47f83 (FF4 JP)
+
+Flags:
+    There are no flags this time! Maybe in future versions. However, you can customize the randomization by choosing a number of floors and number of checkpoints.
+
+Seed value:
+    Input a seed value here, or leave it blank if you don't care.
+
+Output files:
+    The randomizer will output a new, randomized rom with the seed in the filename.
+
+Like this randomizer? Be sure to check out my other projects:
+    FF6 Beyond Chaos Randomizer
+        https://github.com/abyssonym/beyondchaos
+    FF Tactics Rumble Chaos Crashdown Randomizer
+        https://github.com/abyssonym/rumble_chaos_crashdown
+    Breath of Fire 2 Painsong Randomizer
+        https://github.com/abyssonym/painsong
+    Chrono Trigger Eternal Nightmare Randomizer
+        https://github.com/abyssonym/eternalnightmare
+    Final Fantasy Mystic Quest Terrible Secret Randomizer
+        https://github.com/abyssonym/terriblesecret
+    Super Mario RPG Gentle Beauty and Raw Power Randomizer
+        https://github.com/abyssonym/smrpg_gbarp
+    FF5 Grand Cross Randomizer
+        https://github.com/abyssonym/grand_cross
