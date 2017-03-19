@@ -12,7 +12,7 @@ EncounterRateObject encounter_rate_table.txt    74342   384
 OverworldEncObject  encounter_table.txt         74542   84
 EncounterObject     encounter_table.txt         74596   384
 PackObject          pack_table.txt              74816   93
-EquipmentObject     equipment_table.txt         79100   174
+EquipmentObject     equipment_table.txt         79100   176
 MedicineObject      medicine_table.txt          79680   46
 PriceObject         price_table.txt             7a450   256
 CharacterObject     character_table.txt         7a900   16
@@ -25,7 +25,7 @@ NPCVisibleObject    npc_visible_table.txt       97200   64
 EventCallObject     event_call_table.txt        97260   256
 PlacementObject     placement_table.txt         98000   384     pointdelimit 98300 2 0
 SpeechObject        event_call_table.txt        99800   512
-ShopObject          shop_table.txt              9a300   33
+ShopObject          shop_table.txt              9a300   48
 CommandObject       command_table.txt           9fd55   22
 MenuCommandObject   menu_command_table.txt      9fddd   16
 AutoBattleObject    solo_battle_table.txt       9fe0d   8

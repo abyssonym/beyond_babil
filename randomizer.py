@@ -352,6 +352,15 @@ class ClusterGroup:
         return set([c.canonical_mapid for c in self.clusters])
 
     @property
+    def maps(self):
+        maps = []
+        for c in sorted(self.clusters, key=lambda c2: (c2.rank, c2)):
+            m = MapObject.get(c.canonical_mapid)
+            if m not in maps:
+                maps.append(m)
+        return maps
+
+    @property
     def ranked_mapids(self):
         mapids = []
         for c in sorted(self.clusters, key=lambda c: c.rank):
@@ -837,6 +846,159 @@ def assign_formations(cluster_groups):
     zeromus.monster_qty = 0b00010000
 
 
+def assign_treasure(cluster_groups):
+    all_chests = []
+    for cg in cluster_groups:
+        for m in cg.maps:
+            chests = m.chests
+            random.shuffle(chests)
+            all_chests.extend(chests)
+
+    def share_mythic(item, candidates=None):
+        if item.rank < 500000:
+            return item
+        if candidates is None:
+            candidates = [p for p in PriceObject.every if not p.banned]
+        candidates = [c for c in candidates if c.rank >= item.rank]
+        return random.choice(candidates)
+
+    candidates = []
+    max_chest = float(len(all_chests)-1)
+    indexed_chests = list(enumerate(all_chests))
+    random.shuffle(indexed_chests)
+    for i, c in indexed_chests:
+        if not candidates:
+            candidates = [p for p in PriceObject.every if not p.banned]
+            candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
+        rank = i / max_chest
+        max_item = len(candidates)-1
+        a = random.randint(0, random.randint(0, max_item))
+        b = random.randint(0, max_item)
+        a, b = min(a, b), max(a, b)
+        index = (a * (1-rank)) + (b * rank)
+        index = int(round(index))
+        item = share_mythic(candidates[index], candidates)
+        c.misc3 = item.index
+        c.misc2 = 0x80
+        if not item.is_medicine:
+            candidates.remove(item)
+
+    candidates = [p for p in PriceObject.every if not p.banned]
+    candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
+    nonweirds = [c for c in candidates if c.is_medicine or c.is_equipment
+                 or c.is_battle_item or (c.is_consumable and c.buyable)]
+    consumables = [c for c in nonweirds if c.is_consumable]
+    for d in MonsterDropObject.every:
+        consume = False
+        nonweird = False
+        items = []
+        for i in xrange(4):
+            if consume:
+                cands = consumables
+            elif nonweird:
+                cands = nonweirds
+            else:
+                cands = candidates
+            max_index = len(cands)-1
+            if i == 0:
+                index = random.randint(random.randint(
+                    random.randint(0, max_index), max_index), max_index)
+            elif i == 1:
+                index = random.randint(random.randint(0, max_index), max_index)
+            elif i == 2:
+                index = random.randint(0, max_index)
+            elif i == 3:
+                index = random.randint(0, random.randint(0, max_index))
+            item = share_mythic(cands[index], cands)
+            items.insert(0, item)
+            if len(items) < 4:
+                consume = consume or random.choice([True, False])
+                nonweird = nonweird or consume or random.choice([True, False])
+        d.items = [i.index for i in items]
+
+    drops = MonsterDropObject.ranked
+    monsters = [m for m in MonsterObject.ranked if m.rank > 0]
+    max_drop, max_mon = len(drops)-1, float(len(monsters)-1)
+    for i, m in enumerate(monsters):
+        rank = i / max_mon
+        a = random.randint(0, random.randint(0, random.randint(0, max_drop)))
+        b = random.randint(random.randint(0, max_drop), max_drop)
+        a, b = min(a, b), max(a, b)
+        index = (a * (1-rank)) + (b * rank)
+        index = int(round(index))
+        m.set_drops(drops[index])
+        if m.common:
+            drop_rate = 1 + random.randint(
+                0, random.randint(0, random.randint(0, 2)))
+        else:
+            drop_rate = 1 + random.randint(0, 1) + random.randint(0, 1)
+        m.set_drop_rate(drop_rate)
+    for m in MonsterObject.every:
+        if m.rank <= 0:
+            m.set_drop_rate(0)
+        else:
+            assert m.drop_rate > 0
+
+    done_equips = defaultdict(set)
+    for s in ShopObject.every:
+        option = random.choice(["is_weapon", "is_armor", "is_consumable"])
+        candidates = [p for p in PriceObject.every if getattr(p, option)
+                      and (p.is_arrows or p.price > 10) and p.sellable
+                      and not (p.banned or p.rare_tool)]
+
+        if option == "is_consumable":
+            candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
+            battle_cands = [p for p in candidates if p.is_battle_item
+                            or p.is_arrows]
+            med_cands = [p for p in candidates if p not in battle_cands]
+            num_battle = random.randint(0, random.randint(0, 8))
+
+            items = []
+            while len(items) < num_battle:
+                max_index = len(battle_cands)-1
+                index = random.randint(0, random.randint(0, max_index))
+                chosen = battle_cands[index]
+                if chosen not in items:
+                    items.append(chosen)
+            while len(items) < 8:
+                max_index = len(med_cands)-1
+                index = random.randint(0, random.randint(0, max_index))
+                chosen = med_cands[index]
+                if chosen not in items:
+                    items.append(chosen)
+
+            s.items = sorted([i.index for i in items])
+            continue
+
+        equip_indexes = set([])
+        for c in candidates:
+            e = EquipmentObject.get(c.index)
+            equip_indexes.add((e.equip_index, c.is_arrows))
+        temp = sorted(equip_indexes - done_equips[option])
+        if len(temp) < 8:
+            done_equips[option] = set([])
+            chosen = temp
+            sorted_indexes = sorted(equip_indexes)
+            while len(chosen) < 8:
+                c = random.choice(sorted_indexes)
+                if c not in chosen:
+                    chosen.append(c)
+                    done_equips[option].add(c)
+        else:
+            chosen = random.sample(temp, 8)
+            done_equips[option] |= set(chosen)
+        items = []
+        for c in chosen:
+            itemcands = [i for i in candidates
+                         if (i.equip_index, i.is_arrows) == c]
+            itemcands = sorted(itemcands, key=lambda i: (i.rank, i.index))
+            max_index = len(itemcands)-1
+            index = random.randint(0, random.randint(0, max_index))
+            item = itemcands[index]
+            items.append(item)
+        s.items = sorted([i.index for i in items])
+
+
 def generate_cave_layout(segment_lengths=None):
     LUNG_INDEX = 0xbc
     ALTERNATE_PALETTE_BATTLE_BGS = [0, 4, 7, 8, 11, 12]
@@ -854,7 +1016,7 @@ def generate_cave_layout(segment_lengths=None):
     f.close()
     mapids = sorted(set([c.mapid for c in clusters]),
                     key = lambda m: (max(
-                        [len(mo.all_exits) for mo in
+                        [(len(mo.all_exits), len(mo.chests)) for mo in
                          MapObject.reverse_grid_index(m)]), m))
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
@@ -1096,6 +1258,7 @@ def generate_cave_layout(segment_lengths=None):
 
     for i, cg in enumerate(cluster_groups):
         base_rank = sum(segment_lengths[:i])
+        cg.base_rank = base_rank
         for c in cg.clusters:
             c.cluster_group = cg
             m = MapObject.reverse_grid_index_canonical(c.mapid)
@@ -1277,6 +1440,7 @@ def generate_cave_layout(segment_lengths=None):
     cluster_groups[0].home = lunar_whale.index, 7, 10
 
     assign_formations(cluster_groups)
+    assign_treasure(cluster_groups)
 
     ZEMUS_FLAME = 66
     placement_index = unused_placement_indexes.pop()
@@ -1686,6 +1850,18 @@ class MonsterDropObject(TableObject):
             s += ItemNameObject.get(d).name + "\n"
         return s.strip()
 
+    @property
+    def item_objects(self):
+        return [PriceObject.get(i) for i in self.items]
+
+    @property
+    def rank(self):
+        rates = [1/2.0, 5/16.0, 11/64.0, 1/64.0]
+        rank = 0
+        for r, i in zip(rates, self.item_objects):
+            rank += (r * i.rank)
+        return rank
+
 
 class MonsterGilObject(TableObject): pass
 class MonsterXPObject(TableObject): pass
@@ -1698,6 +1874,8 @@ class MonsterObject(TableObject):
         return "%s %s %s" % ("{0:0>2}".format("%x" % self.index), int(round(self.rank)), self.name)
 
     def write_data(self, filename=None, pointer=None):
+        if self.index >= 0xDF:
+            return self.pointer
         return super(MonsterObject, self).write_data(filename, self.pointer)
 
     @property
@@ -1706,6 +1884,11 @@ class MonsterObject(TableObject):
             return MonsterNameObject.get(self.index).name
         else:
             return "MONSTER_%x" % self.index
+
+    @property
+    def common(self):
+        return any([p for p in PackObject.every if any(
+            [f for f in p.formations[:6] if self in f.monsters])])
 
     def get_attr_rank(self, attr):
         if attr not in MonsterObject.minmaxes:
@@ -1719,7 +1902,14 @@ class MonsterObject(TableObject):
 
     @property
     def rank(self):
-        return self.xp
+        if hasattr(self, "_rank"):
+            return self._rank
+        try:
+            self._rank = min([f.rank for f in FormationObject.every
+                              if self in f.monsters])
+        except ValueError:
+            self._rank = -1
+        return self.rank
 
     @property
     def xp(self):
@@ -1733,6 +1923,12 @@ class MonsterObject(TableObject):
     def drops(self):
         return MonsterDropObject.get(self.drop_index & 0x3F)
 
+    def set_drops(self, drops):
+        if not isinstance(drops, int):
+            drops = drops.index
+        self.drop_index &= 0xC0
+        self.drop_index |= drops
+
     @property
     def pretty_drops(self):
         return self.drops.pretty_items
@@ -1740,6 +1936,10 @@ class MonsterObject(TableObject):
     @property
     def drop_rate(self):
         return self.drop_index >> 6
+
+    def set_drop_rate(self, rate):
+        self.drop_index &= 0x3F
+        self.drop_index |= (rate << 6)
 
 
 class EncounterRateObject(TableObject): pass
@@ -1785,18 +1985,59 @@ class SpellNameObject(NameObject): pass
 class LongSpellNameObject(NameObject): pass
 
 
+class EquipmentObject(TableObject):
+    @property
+    def name(self):
+        return ItemNameObject.get(self.index).name
+
+    @property
+    def equip_index(self):
+        return self.equip_code & 0x1f
+
+
+class MedicineObject(TableObject):
+    @property
+    def name(self):
+        return ItemNameObject.get(self.index+0xb0).name
+
+
 class PriceObject(TableObject):
     @property
     def name(self):
         return ItemNameObject.get(self.index).name
 
     @property
+    def equip_index(self):
+        return EquipmentObject.get(self.index).equip_index
+
+    @property
+    def is_weapon(self):
+        return self.is_equipment and self.index <= 0x5F
+
+    @property
+    def is_armor(self):
+        return self.is_equipment and self.index >= 0x61
+
+    @property
+    def is_consumable(self):
+        return self.is_arrows or self.is_medicine or (
+            self.index >= 0xde and not self.rare_tool)
+
+    @property
     def is_equipment(self):
-        return self.index <= 175
+        return self.index <= 0xaf
+
+    @property
+    def is_battle_item(self):
+        return self.is_medicine and self.index <= 0xcd
+
+    @property
+    def is_medicine(self):
+        return 0xb0 <= self.index <= 0xdd
 
     @property
     def is_arrows(self):
-        return 0x84 <= self.index <= 0x95
+        return 0x54 <= self.index <= 0x5f
 
     @property
     def price(self):
@@ -1806,7 +2047,7 @@ class PriceObject(TableObject):
 
     @property
     def banned(self):
-        return self.index in [0, 96] + range(0xFC, 0x100)
+        return self.index in [0, 0x46, 0x60, 0x9a] + range(0xFC, 0x100)
 
     @property
     def buyable(self):
@@ -1820,11 +2061,26 @@ class PriceObject(TableObject):
         return self.price != 0
 
     @property
+    def rare_tool(self):
+        return self.index in (
+            [0x3E, 0xC8, 0xE4, 0xEC] + range(0xDF, 0xE2) + range(0xE7, 0xEB))
+
+    @property
     def rank(self):
         if self.banned:
             return -1
+        if self.rare_tool:
+            return 1000000
         if self.buyable:
-            return self.price
+            if self.is_equipment and not self.is_arrows:
+                return self.price * 2
+            else:
+                return self.price
+        if self.sellable and self.price > 10:
+            if self.is_equipment:
+                return self.price * 4
+            else:
+                return self.price * 2
         return 1000000
 
 
@@ -2182,7 +2438,16 @@ class SpeechObject(EventCallObject):
         return addresses.speech_base + self.event_call_pointer
 
 
-class ShopObject(TableObject): pass
+class ShopObject(TableObject):
+    @property
+    def item_objects(self):
+        return [PriceObject.get(i) for i in self.items]
+
+    @property
+    def rank(self):
+        return sum([i.rank for i in self.item_objects])
+
+
 class CommandObject(TableObject): pass
 class MenuCommandObject(TableObject): pass
 class AutoBattleObject(TableObject): pass
@@ -2943,7 +3208,7 @@ if __name__ == "__main__":
         duplicate_learning_fix()
         warp_fix()
         setup_cave()
-        clean_and_write(ALL_OBJECTS)
+
         write_credits()
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()

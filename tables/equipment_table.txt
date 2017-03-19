@@ -1,1 +1,8 @@
-unknown,8,list
+misc0,1
+power,1
+evasion_rate,1
+misc3,1
+elements,1
+races,1
+equip_code,1
+stats,1
