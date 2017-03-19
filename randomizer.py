@@ -927,6 +927,9 @@ def assign_treasure(cluster_groups):
             candidates.remove(chosen)
             f = unused_formations.pop(0)
             f.copy_data(x)
+            if f.battle_music == 3:
+                f.set_music(0)
+            f.set_bit("no_flee", True)
             findex = f.index - 448
             assert 0 <= findex < 0x40
             chosen.misc2 = 0x40 | findex
@@ -3261,6 +3264,7 @@ if __name__ == "__main__":
         duplicate_learning_fix()
         warp_fix()
         setup_cave()
+        clean_and_write(ALL_OBJECTS)
 
         write_credits()
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
