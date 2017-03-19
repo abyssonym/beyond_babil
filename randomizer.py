@@ -77,7 +77,8 @@ def write_credits():
     names = [n.strip() for n in names if n.strip()]
 
     def center(s):
-        width = len(s)
+        assert s[0] != "\n"
+        width = len(s.strip("\n"))
         margin = (32-width) / 2
         assert margin >= 0
         return (" " * margin) + s
@@ -3210,6 +3211,7 @@ def setup_opening_event(mapid=0, x=16, y=30):
     e.overwrite_event(new_event)
     child_rydia = CharacterObject.get(0x2)
     child_rydia.sprite = 11
+    return chosen
 
 
 def setup_cave():
@@ -3322,9 +3324,10 @@ def setup_cave():
     mapid, x, y = cluster_groups[0].home
     MapObject.get(mapid).set_bit("exitable", False)
     reseed()
-    setup_opening_event(mapid=mapid, x=x, y=y)
+    chosen = setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
     print "Done!"
+    suggest_party(chosen)
 
 
 def undummy():
@@ -3488,6 +3491,49 @@ def warp_fix():
 def unload_fusoya_spellsets():
     for ss in InitialSpellObject.getgroup(11):
         ss.groupindex = -1
+
+
+def suggest_party(chosen):
+    reseed()
+    names = {0: "Dark Knight Cecil",
+             1: "Kain",
+             2: "Rydia",
+             3: "Tellah",
+             4: "Edward",
+             5: "Rosa",
+             6: "Yang",
+             7: "Palom",
+             8: "Porom",
+             10: "Paladin Cecil",
+             13: "Cid",
+             17: "Edge"}
+    reverse_names = dict([(v, k) for (k, v) in names.items()])
+    leader = names[chosen]
+    party = [leader]
+    while len(party) < 5:
+        if "Palom" in party and "Porom" not in party:
+            party.append("Porom")
+        elif "Porom" in party and "Palom" not in party:
+            party.append("Palom")
+        else:
+            party.append(random.choice(sorted(names.values())))
+    count = Counter(party)
+    party = sorted(set(party), key=lambda p: reverse_names[p])
+    party.remove(leader)
+    party = [leader] + party
+    final = []
+    assert sum(count[p] for p in party) == 5
+    for p in party:
+        assert count[p] > 0
+        if count[p] == 1:
+            final.append(p)
+        else:
+            final.append("%s x%s" % (p, count[p]))
+    s = ", ".join(final)
+    print
+    print "Your suggested party is:"
+    print s
+    print
 
 
 if __name__ == "__main__":
