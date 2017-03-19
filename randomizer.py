@@ -16,7 +16,7 @@ import string
 VERSION = 1
 ALL_OBJECTS = None
 LOCATION_NAMES = []
-DEBUG_MODE = True
+DEBUG_MODE = False
 RESEED_COUNTER = 0
 
 textdict = {}
@@ -929,6 +929,10 @@ def assign_treasure(cluster_groups):
         if not item.is_medicine:
             candidates.remove(item)
 
+    if not any([c.contents == 0xFB for c in all_chests]):
+        c = random.choice(all_chests)
+        c.misc3= 0xFB
+
     unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
     for cg in cluster_groups:
         candidates = sorted([c for m in cg.maps for c in m.chests],
@@ -1450,11 +1454,9 @@ def generate_cave_layout(segment_lengths=None):
         misc1=mapid, misc2=(x|0x80), misc3=y)
     event = [
         0xF0, 0x24,
-        0xF8, 0xC0,
+        0xF7, 0xFB,
         0xFE, zemus.index, 16, 23, 0x00,
         0xFA, zemus.music,
-        0xFF,
-        0xC3,
         0xFF,
         ]
 
@@ -1473,9 +1475,16 @@ def generate_cave_layout(segment_lengths=None):
     TriggerObject.create_trigger(
         mapid=zemus.index, x=14, y=23,
         misc1=mapid, misc2=(x|0x80), misc3=y)
+    event = [
+        0xF7, 0xFB,
+        0xFE, lunar_whale.index, 12|0x80, 13, 0x00,
+        0xFA, lunar_whale.music,
+        0xFF,
+        ]
+    event_call = make_simple_event_call(event)
     TriggerObject.create_trigger(
         mapid=zemus.index, x=16, y=23,
-        misc1=lunar_whale.index, misc2=(12|0x80), misc3=13)
+        misc1=0xFF, misc2=event_call.index, misc3=0x00)
     for a in finish:
         TriggerObject.create_trigger(
             mapid=a.mapid, x=a.x, y=a.y,
@@ -3207,6 +3216,8 @@ def setup_opening_event(mapid=0, x=16, y=30):
         0xC6,
         0xFF,
         ]
+    if DEBUG_MODE:
+        new_event = [0xE0, 0xFB] + new_event
     e = EventObject.get(0x10)
     e.overwrite_event(new_event)
     child_rydia = CharacterObject.get(0x2)
