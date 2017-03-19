@@ -3281,6 +3281,9 @@ def setup_cave():
         for attr, _, _ in InitialEquipObject.specsattrs:
             setattr(i, attr, 0)
 
+    for mxp in MonsterXPObject.every:
+        mxp.xp = min(mxp.xp*2, 65000)
+
     CommandObject.get(2).commands = CommandObject.get(0x10).commands
     event_spells = [
         (0x1d, 3), (0x1e, 3), (0x21, 3), (0x24, 3),
