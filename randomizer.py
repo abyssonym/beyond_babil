@@ -3225,7 +3225,7 @@ def setup_opening_event(mapid=0, x=16, y=30):
     return chosen
 
 
-def setup_cave():
+def setup_cave(segment_lengths):
     print "Please wait. This will take some time."
     print "Preparing to generate dungeon..."
     f = open(get_outfile(), "r+b")
@@ -3311,7 +3311,7 @@ def setup_cave():
         i.groupindex = -1
 
     reseed()
-    cluster_groups, lungs = generate_cave_layout()
+    cluster_groups, lungs = generate_cave_layout(segment_lengths)
     reseed()
     for cg in cluster_groups:
         for mapid in sorted(cg.canonical_mapids):
@@ -3552,6 +3552,29 @@ if __name__ == "__main__":
         print ('You are using the FF4 '
                'randomizer version %s.' % VERSION)
         print
+
+        x = raw_input("How many floors? (default: 100) ")
+        try:
+            num_floors = int(x)
+        except ValueError:
+            num_floors = 100
+        num_floors = max(min(num_floors, 160), 3)
+
+        num_checkpoints = int(round(num_floors**0.5))-1
+        y = raw_input("How many checkpoints? (default: %s) " % num_checkpoints)
+        try:
+            num_checkpoints = int(y)
+        except ValueError:
+            pass
+        num_checkpoints = max(min(num_checkpoints, num_floors/3), 0)
+        segment_lengths = [num_floors / (num_checkpoints+1)] * (num_checkpoints+1)
+        for i in range(len(segment_lengths)):
+            if sum(segment_lengths) == num_floors:
+                break
+            segment_lengths[i] += 1
+        print "Using %s floors and %s checkpoints." % (num_floors,
+                                                       num_checkpoints)
+
         ALL_OBJECTS = [g for g in globals().values()
                        if isinstance(g, type) and issubclass(g, TableObject)
                        and g not in [TableObject]]
@@ -3566,7 +3589,7 @@ if __name__ == "__main__":
         lunar_ai_fix()
         duplicate_learning_fix()
         warp_fix()
-        setup_cave()
+        setup_cave(segment_lengths)
 
         if DEBUG_MODE:
             for m in MonsterObject.every:
