@@ -18,6 +18,7 @@ ALL_OBJECTS = None
 LOCATION_NAMES = []
 DEBUG_MODE = False
 RESEED_COUNTER = 0
+NUM_FLOORS, NUM_CHECKPOINTS = None, None
 
 textdict = {}
 reverse_textdict = {}
@@ -115,22 +116,27 @@ def write_credits():
     length = finish - start
     beginning = "".join(map(center_to_bytestr, [
         "FINAL FANTASY IV\n",
-        "BABEL RANDOMIZER\n",
-        "%s SEED %s\n\n\n" % (get_global_label(), get_seed()),
+        "BEYOND BABIL RANDOMIZER\n",
+        "%s FLOORS %s CHECKPOINTS\n" % (NUM_FLOORS, NUM_CHECKPOINTS),
+        "SEED %s\n\n\n" % get_seed(),
         "SPECIAL THANKS TO\n\n",
         ]))
     ending = "".join(map(center_to_bytestr, [
-        "\n\n",
+        "\n\n\n",
         "...AND YOU."
         ])) + chr(0)
     roll = ""
+    counter = 0
     while True:
+        counter += 1
+        if counter == 76:
+            break
         max_index = len(names)-1
         index = random.randint(0, random.randint(0, max_index))
         name = names[index]
         names.remove(name)
         assert len(name) <= 32
-        name = center_to_bytestr(name + "\n")
+        name = center_to_bytestr(name + "\n\n")
         if len(beginning + roll + name + ending) > length:
             break
         roll += name
@@ -3593,31 +3599,31 @@ def suggest_party(chosen):
 
 if __name__ == "__main__":
     try:
-        print ('You are using the FF4 '
+        print ('You are using the FF4 Beyond Babil '
                'randomizer version %s.' % VERSION)
         print
 
         x = raw_input("How many floors? (default: 100) ")
         try:
-            num_floors = int(x)
+            NUM_FLOORS = int(x)
         except ValueError:
-            num_floors = 100
-        num_floors = max(min(num_floors, 160), 3)
+            NUM_FLOORS = 100
+        NUM_FLOORS = max(min(NUM_FLOORS, 160), 3)
 
-        num_checkpoints = int(round(num_floors**0.5))-1
-        y = raw_input("How many checkpoints? (default: %s) " % num_checkpoints)
+        NUM_CHECKPOINTS = int(round(NUM_FLOORS**0.5))-1
+        y = raw_input("How many checkpoints? (default: %s) " % NUM_CHECKPOINTS)
         try:
-            num_checkpoints = int(y)
+            NUM_CHECKPOINTS = int(y)
         except ValueError:
             pass
-        num_checkpoints = max(min(num_checkpoints, num_floors/3), 0)
-        segment_lengths = [num_floors / (num_checkpoints+1)] * (num_checkpoints+1)
+        NUM_CHECKPOINTS = max(min(NUM_CHECKPOINTS, NUM_FLOORS/3), 0)
+        segment_lengths = [NUM_FLOORS / (NUM_CHECKPOINTS+1)] * (NUM_CHECKPOINTS+1)
         for i in range(len(segment_lengths)):
-            if sum(segment_lengths) == num_floors:
+            if sum(segment_lengths) == NUM_FLOORS:
                 break
             segment_lengths[i] += 1
-        print "Using %s floors and %s checkpoints." % (num_floors,
-                                                       num_checkpoints)
+        print "Using %s floors and %s checkpoints." % (NUM_FLOORS,
+                                                       NUM_CHECKPOINTS)
 
         ALL_OBJECTS = [g for g in globals().values()
                        if isinstance(g, type) and issubclass(g, TableObject)
