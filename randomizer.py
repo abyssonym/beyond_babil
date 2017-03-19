@@ -344,6 +344,12 @@ class ClusterGroup:
         self.clusters = sorted(set(clusters))
 
     @property
+    def formation_rank_range(self):
+        low = min(f.rank for f in self.formations)
+        high = max(f.rank for f in self.formations)
+        return low, high
+
+    @property
     def mapids(self):
         return set([c.mapid for c in self.clusters])
 
@@ -845,6 +851,26 @@ def assign_formations(cluster_groups):
     zeromus.monster_types = [255, 201, 255]
     zeromus.monster_qty = 0b00010000
 
+    for cg in cluster_groups:
+        cg.extras = []
+    for x in extras:
+        candidates = []
+        for (cg1, cg2) in zip(cluster_groups, cluster_groups[1:]):
+            l1, h1 = cg1.formation_rank_range
+            l2, h2 = cg2.formation_rank_range
+            if h1 <= x.rank < h2:
+                candidates.append(cg1)
+        if not candidates:
+            low, high = cluster_groups[0].formation_rank_range
+            if x.rank <= high:
+                candidates.append(cluster_groups[0])
+            low, high = cluster_groups[-1].formation_rank_range
+            if x.rank >= low:
+                candidates.append(cluster_groups[-1])
+        assert candidates
+        chosen = random.choice(candidates)
+        chosen.extras.append(x)
+
 
 def assign_treasure(cluster_groups):
     all_chests = []
@@ -882,6 +908,28 @@ def assign_treasure(cluster_groups):
         c.misc2 = 0x80
         if not item.is_medicine:
             candidates.remove(item)
+
+    unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
+    for cg in cluster_groups:
+        candidates = sorted([c for m in cg.maps for c in m.chests],
+                            key=lambda c2: (c2.chest_rank, c2.index))
+        extras = sorted(cg.extras, key=lambda x: x.index)
+        if not (candidates and extras):
+            continue
+        if len(extras) > len(candidates):
+            extras = random.sample(extras, len(candidates))
+        assert len(candidates) >= len(extras)
+        for x in extras:
+            max_index = len(candidates)-1
+            index = random.randint(random.randint(random.randint(
+                0, max_index), max_index), max_index)
+            chosen = candidates[index]
+            candidates.remove(chosen)
+            f = unused_formations.pop(0)
+            f.copy_data(x)
+            findex = f.index - 448
+            assert 0 <= findex < 0x40
+            chosen.misc2 = 0x40 | findex
 
     candidates = [p for p in PriceObject.every if not p.banned]
     candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
@@ -2514,6 +2562,11 @@ class TriggerObject(TableObject):
             s = "%s EXIT: $%x %s %s" % (s, self.new_map,
                                        self.dest_x, self.dest_y)
         return s.strip()
+
+    @property
+    def chest_rank(self):
+        assert self.is_chest
+        return PriceObject.get(self.contents).rank
 
     @property
     def is_event(self):
