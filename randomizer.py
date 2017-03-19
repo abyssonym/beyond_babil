@@ -1191,8 +1191,6 @@ def generate_cave_layout(segment_lengths=None):
                 mapids.remove(candchoose.index)
             replace_dict[choose] = candchoose.index
             assert not set(to_replace) & set(mapids)
-        #if chosen and chosen[-1] == 263:
-        #    import pdb; pdb.set_trace()
         if choose not in special_maps:
             chosen.append(choose)
     assert not set(chosen) & set(special_maps)
@@ -1460,8 +1458,6 @@ def generate_cave_layout(segment_lengths=None):
             if uec.bytecode == bytecode:
                 if ((not npc) or
                         NPCSpriteObject.get(uec.index).sprite == sprite):
-                    if npc:
-                        import pdb; pdb.set_trace()
                     return uec
         candidate_event_calls = [e for e in unecs if e.size >= size]
         event_call = candidate_event_calls.pop(0)
