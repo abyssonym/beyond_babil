@@ -17,6 +17,7 @@ VERSION = 1
 ALL_OBJECTS = None
 LOCATION_NAMES = []
 DEBUG_MODE = True
+RESEED_COUNTER = 0
 
 textdict = {}
 reverse_textdict = {}
@@ -26,6 +27,13 @@ for line in open(path.join(tblpath, "font.txt")):
     textdict[byte] = character
     reverse_textdict[character] = byte
 assert ' ' in reverse_textdict
+
+
+def reseed():
+    global RESEED_COUNTER
+    RESEED_COUNTER += 1
+    seed = get_seed()
+    random.seed(seed + (RESEED_COUNTER**2))
 
 
 def bytestr_to_text(bytestr):
@@ -599,7 +607,7 @@ class ClusterGroup:
 
 
 def assign_formations(cluster_groups):
-    print "ASSIGNING FORMATIONS"
+    print "Assigning enemy formations..."
     formations = [f for f in FormationObject.every if f.rank > 0]
     random.shuffle(formations)
     signatures = set([])
@@ -883,6 +891,7 @@ def assign_formations(cluster_groups):
 
 
 def assign_treasure(cluster_groups):
+    print "Assigning treasure..."
     all_chests = []
     for cg in cluster_groups:
         for m in cg.maps:
@@ -1075,10 +1084,14 @@ def generate_cave_layout(segment_lengths=None):
     clusters = [Cluster.from_string(line) for line in f.readlines()
                 if line.strip() and line[0] != '#']
     f.close()
+    def health_rank_from_grid_index(g):
+        ms = MapObject.reverse_grid_index(g)
+        m = max(ms,
+                key=lambda m2: (m2.get_cluster_health(clusters), m2.index))
+        return (m.get_cluster_health(clusters), m.index)
+
     mapids = sorted(
-        set([c.mapid for c in clusters]), key=lambda m: (max(
-        [(mo.get_cluster_health(clusters), mo.index) for mo in
-         MapObject.reverse_grid_index(m)]), m))
+        set([c.mapid for c in clusters]), key=health_rank_from_grid_index)
     f = open(bannedgridpath)
     banned_grids = set([int(line, 0x10) for line in f.readlines()
                         if line.strip()])
@@ -1126,6 +1139,7 @@ def generate_cave_layout(segment_lengths=None):
     zemus_map[23][16] = 0x60
     zemus.overwrite_map_data(zemus_map)
     special_maps = [LUNAR_WHALE_INDEX, ZEMUS_INDEX]
+    print "Selecting maps..."
     while len(chosen) < sum(segment_lengths):
         for m in special_maps:
             if m not in replace_dict:
@@ -1140,13 +1154,13 @@ def generate_cave_layout(segment_lengths=None):
             choose = mapids[choose]
             mapids.remove(choose)
         if choose >= 0x100:
-            size = MapGrid2Object.get(choose & 0xFF).size
+            size = MapGrid2Object.get(choose & 0xFF).adjusted_size
             candidates = [m for m in MapGridObject.every
-                          if m.index in mapids and m.size >= size]
+                          if m.index in mapids and m.adjusted_size >= size]
             priority = [m for m in MapGridObject.every
                         if m.index not in mapids + chosen + to_replace
-                        and m.size >= size and m.index not in banned_grids]
-            sort_func = lambda m: (m.size, m.index)
+                        and m.adjusted_size >= size and m.index not in banned_grids]
+            sort_func = lambda m: (m.adjusted_size, m.index)
             candidates = (sorted(priority, key=sort_func) +
                           sorted(candidates, key=sort_func))
             # the zeroth map should have trigger data that starts with a low
@@ -1165,11 +1179,14 @@ def generate_cave_layout(segment_lengths=None):
                 mapids.remove(candchoose.index)
             replace_dict[choose] = candchoose.index
             assert not set(to_replace) & set(mapids)
+        #if chosen and chosen[-1] == 263:
+        #    import pdb; pdb.set_trace()
         if choose not in special_maps:
             chosen.append(choose)
     assert not set(chosen) & set(special_maps)
     clusters = [c for c in clusters if c.mapid in chosen]
 
+    print "Grouping maps..."
     cluster_groups = [ClusterGroup([]) for _2 in xrange(len(segment_lengths))]
     for i, cg in enumerate(cluster_groups):
         cg.index = i
@@ -1223,21 +1240,24 @@ def generate_cave_layout(segment_lengths=None):
             cgu.clusters.append(b)
             cgh.clusters.remove(b)
 
-    for cg in cluster_groups:
-        for _2 in xrange(5):
-            try:
-                cg.full_execute()
+    if cluster_groups:
+        print "Connecting maps..."
+        for cg in cluster_groups:
+            for _2 in xrange(5):
+                try:
+                    cg.full_execute()
+                    break
+                except CaveException:
+                    continue
+            else:
+                cluster_groups = []
                 break
-            except CaveException:
-                continue
-        else:
-            cluster_groups = []
-            break
 
     if [len(cg.mapids) for cg in cluster_groups] != segment_lengths:
         print "Retrying cave generation..."
         return generate_cave_layout(segment_lengths)
 
+    reseed()
     random.shuffle(cluster_groups)
 
     for after, before in replace_dict.items():
@@ -1529,9 +1549,13 @@ def generate_cave_layout(segment_lengths=None):
 
     cluster_groups[0].home = lunar_whale.index, 7, 10
 
+    reseed()
     assign_formations(cluster_groups)
+    reseed()
     assign_treasure(cluster_groups)
+    reseed()
 
+    print "Finishing dungeon..."
     ZEMUS_FLAME = 66
     placement_index = unused_placement_indexes.pop()
     zemus.npc_placement_index = placement_index
@@ -1700,6 +1724,7 @@ def generate_cave_layout(segment_lengths=None):
             mapid=lung.index, x=15, y=15,
             misc1=0xFF, misc2=event_call.index, misc3=0)
 
+    reseed()
     npcs = [n for cg in cluster_groups for m in cg.maps
             for n in m.npc_placements]
     npcs = sorted(set(npcs))
@@ -2746,6 +2771,18 @@ class MapObject(TableObject):
     def get_cluster_health(self, clusters):
         if hasattr(self, "_cluster_health"):
             return self._cluster_health
+        if get_global_label() == "FF4_JP":
+            modifiers = path.join(tblpath, "jp_scoring_modifier.txt")
+            f = open(modifiers)
+            modifiers = f.readlines()
+            f.close()
+            for line in modifiers:
+                grid_index, a, b = line.strip().split()
+                grid_index = int(grid_index, 0x10)
+                a, b = int(a), int(b)
+                if grid_index == self.true_grid_index:
+                    self._cluster_health = a, b
+                    return self.get_cluster_health(None)
         num_clusters = len([c for c in clusters
                             if c.mapid == self.mapgrid.index])
         if self.index < 0x100:
@@ -2758,6 +2795,12 @@ class MapObject(TableObject):
         b += len([t for t in self.event_triggers if t.misc2 != 2])
         self._cluster_health = a, b
         return self.get_cluster_health(None)
+
+    @property
+    def true_grid_index(self):
+        if self.index >= 0x100:
+            return self.grid_index | 0x100
+        return self.grid_index
 
     @property
     def encounters(self):
@@ -3064,6 +3107,36 @@ class MapGridObject(TableObject):
         return len(self.compressed)
 
     @property
+    def super_index(self):
+        if isinstance(self, MapGrid2Object):
+            return self.index | 0x100
+        else:
+            return self.index
+
+    @property
+    def adjusted_size(self):
+        if hasattr(self, "_adjusted_size"):
+            return self._adjusted_size
+        modifiers = path.join(tblpath, "size_modifier.txt")
+        f = open(modifiers)
+        modifiers = f.readlines()
+        f.close()
+        for line in modifiers:
+            grid_index, size = line.split()
+            grid_index = int(grid_index, 0x10)
+            size = int(size)
+            if grid_index == self.super_index:
+                if grid_index >= 0x100:
+                    assert size >= self.size
+                else:
+                    assert size <= self.size
+                self._adjusted_size = size
+                break
+        else:
+            self._adjusted_size = self.size
+        return self.adjusted_size
+
+    @property
     def pretty_map(self):
         s = ""
         for row in self.map:
@@ -3140,6 +3213,8 @@ def setup_opening_event(mapid=0, x=16, y=30):
 
 
 def setup_cave():
+    print "Please wait. This will take some time."
+    print "Preparing to generate dungeon..."
     f = open(get_outfile(), "r+b")
     f.seek(addresses.window_palette)
     write_multi(f, 0xc00, length=2)  # game window palette
@@ -3219,7 +3294,9 @@ def setup_cave():
     for i in InitialSpellObject.getgroup(11):
         i.groupindex = -1
 
+    reseed()
     cluster_groups, lungs = generate_cave_layout()
+    reseed()
     for cg in cluster_groups:
         for mapid in sorted(cg.canonical_mapids):
             MapObject.get(mapid).set_bit("warpable", True)
@@ -3241,8 +3318,10 @@ def setup_cave():
 
     mapid, x, y = cluster_groups[0].home
     MapObject.get(mapid).set_bit("exitable", False)
+    reseed()
     setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
+    print "Done!"
 
 
 def undummy():
@@ -3412,6 +3491,7 @@ if __name__ == "__main__":
     try:
         print ('You are using the FF4 '
                'randomizer version %s.' % VERSION)
+        print
         ALL_OBJECTS = [g for g in globals().values()
                        if isinstance(g, type) and issubclass(g, TableObject)
                        and g not in [TableObject]]
