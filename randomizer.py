@@ -2392,8 +2392,8 @@ class EventObject(TableObject):
     @property
     def pretty_script(self):
         s = "EVENT %x\n" % self.index
-        for cmd, parameters in self.instructions:
-            s += "{0:0>2}: ".format("%x" % cmd)
+        for i, (cmd, parameters) in enumerate(self.instructions):
+            s += "{0:0>3}. {1:0>2}: ".format(i, "%x" % cmd)
             s += " ".join(["{0:0>2}".format("%x" % p) for p in parameters])
             s += "\n"
         return s.strip().upper()
@@ -2437,6 +2437,12 @@ class EventObject(TableObject):
         f.close()
         if hasattr(self, "_instructions"):
             delattr(self, "_instructions")
+
+    def overwrite_instructions(self, instructions):
+        data = []
+        for command, parameters in instructions:
+            data += [command] + list(parameters)
+        self.overwrite_event(data)
 
 
 class NPCSpriteObject(TableObject): pass
@@ -3382,8 +3388,11 @@ def setup_cave(segment_lengths):
         a.formation = 0xFFFF
 
     mapid, x, y = cluster_groups[0].home
+    exit_fix(mapid, x, y+2)
     lunar_whale = MapObject.get(mapid)
-    lunar_whale.set_bit("exitable", False)
+    if not DEBUG_MODE:
+        lunar_whale.set_bit("exitable", False)
+        lunar_whale.set_bit("warpable", False)
     reseed()
     chosen = setup_opening_event(mapid=mapid, x=x, y=y)
     write_location_names()
@@ -3547,6 +3556,18 @@ def warp_fix():
     f.seek(addresses.warp_fix_start)
     f.write("".join(map(chr, stack_asm)))
     f.close()
+
+
+def exit_fix(mapid, x, y, bgm=14):
+    exit_event = EventObject.get(0x86)
+    size = exit_event.size
+    begin, end = exit_event.instructions[:56], exit_event.instructions[63:]
+    end.insert(0, (0xEA, [14]))
+    new_instructions = begin + [(0xFE, [mapid, x, y, 0x00]),
+                                (0xD7, [])] + end
+    assert len(new_instructions) == len(exit_event.instructions)-4
+    exit_event.overwrite_instructions(new_instructions)
+    assert exit_event.size <= size
 
 
 def unload_fusoya_spellsets():
