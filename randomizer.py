@@ -875,6 +875,10 @@ def assign_formations(cluster_groups):
 
     zeromus.monster_types = [255, 201, 255]
     zeromus.monster_qty = 0b00010000
+    f = open(get_outfile(), "r+b")
+    f.seek(addresses.zeromus_ai)
+    f.write("".join(map(chr, [0xE1])))
+    f.close()
 
     for cg in cluster_groups:
         cg.extras = []
@@ -3368,7 +3372,7 @@ def setup_cave(segment_lengths):
             m = MapObject.get(mapid)
             m.set_bit("warpable", True)
             m.set_bit("exitable", True)
-            if m.encounters and not DEBUG_MODE:
+            if m.encounters:
                 EncounterRateObject.get(m.index).encounter_rate = 1 + sum(
                     [random.randint(0, 3) for _ in xrange(3)])
 
@@ -3639,13 +3643,12 @@ if __name__ == "__main__":
 
         if DEBUG_MODE:
             for m in MonsterObject.every:
-                m.hp = 0
-                m.attack = 0
-                m.speed_index = 0
-                m.attack_sequence_group = 0
                 MonsterXPObject.get(m.index).xp = 60000
             for p in PriceObject.every:
                 p.set_price(10)
+            for c in CharacterObject.every:
+                c.max_hp = 9999
+                c.current_hp = 9999
 
         clean_and_write(ALL_OBJECTS)
 
