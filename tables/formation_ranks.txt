@@ -409,7 +409,6 @@
 2537500 0b9 Searcher x1, Machine x1, Machine x2
 2622500 0bc Searcher x1, Horseman x1, Machine x2
 2712500 182 Warlock x1, Kary x2
-2800000 0fb Odin x1
 2835000 185 RedGiant x2
 2835000 1eb RedGiant x2
 3000000 192 King?Ryu x1
@@ -437,6 +436,7 @@
 3770003 16c Mantcore x2
 3770004 1af EvilWall x1
 3770005 1ad Leviatan x1
+3770006 0fb Odin x1
 4000000 18d FatalEye x1
 4010000 0c2 Searcher x1, MacGiant x1
 4150000 0c7 D?Machin x1
@@ -457,8 +457,8 @@
 5870000 1f3 Behemoth x1
 5870000 1f4 Behemoth x1
 5870001 1ae Bahamut x1
-5880000 0dc Elements x1, Elements x1
-5880001 0dd CPU x1, Attacker x1, Defender x1
+5880000 0dd CPU x1, Attacker x1, Defender x1
+5880001 0dc Elements x1, Elements x1
 6000000 1a1 Breath x1
 6000001 190 FatalEye x2
 6000100 1fb Pale Dim x1
