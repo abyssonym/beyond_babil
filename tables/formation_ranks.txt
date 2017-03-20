@@ -443,14 +443,14 @@
 4250000 193 King?Ryu x1, Ging?Ryu x1
 4500000 18a King?Ryu x2
 4650000 0ce MacGiant x2
-5000000 0d6 EvilMask x1
+#5000000 0d6 EvilMask x1
 5000000 197 EvilMask x1
 5000000 19c EvilMask x1
 5180000 199 Red D? x1
 5181875 0c8 Searcher x1, D?Machin x1, Beamer x2
 5181975 1c7 Last Arm x1
 5400000 18e Blue D? x2
-5400000 1ef Blue D? x2
+#5400000 1ef Blue D? x2
 5870000 198 Behemoth x1
 5870000 1a3 Behemoth x1
 5870000 1f0 Behemoth x1

@@ -1,0 +1,23 @@
+20 Tricker
+35 D.Bone
+51 D.Fossil
+6b Plague
+80 Breath
+83 Mind
+86 PinkPuff
+8a Kary
+8c Ging-Ryu
+90 EvilMask
+92 RedGiant
+94 FatalEye
+95 D. Lunar
+97 Warlock
+98 Wyvern
+9a Ogopogo
+9b Blue D.
+9c King-Ryu
+9e Pale Dim
+9f Red D.
+a0 Behemoth
+be Bahamut
+c9 Zeromus

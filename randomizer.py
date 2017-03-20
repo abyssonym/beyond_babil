@@ -1816,6 +1816,15 @@ class AIFixObject(TableObject):
         elif a.formation_flags & bit:
             a.formation_flags ^= bit
 
+    @staticmethod
+    def get_formation_ai(index):
+        if not isinstance(index, int):
+            index = index.index
+        index, bit = index / 8, index % 8
+        bit = 1 << bit
+        a = AIFixObject.get(index)
+        return bool(a.formation_flags & bit)
+
 
 class FormationObject(TableObject):
     def __repr__(self):
@@ -1831,18 +1840,21 @@ class FormationObject(TableObject):
     @property
     def is_lunar_ai_formation(self):
         if hasattr(self, "_is_lunar_ai_formation"):
-            return self._is_lunar_ai_formation
+            return self._is_lunar_ai_formation is True
+
         for m in MapObject.every:
+            encounter = EncounterObject.get(m.index).encounter
             if m.is_lunar_ai_map:
-                if EncounterObject.get(m.index).encounter == 0:
+                if encounter == 0:
                     if self in m.event_battles:
-                        self._is_lunar_ai_formation = True
+                        self._is_lunar_ai_formation = m.is_lunar_ai_map
                         break
                 elif self in m.all_formations:
-                    self._is_lunar_ai_formation = True
+                    self._is_lunar_ai_formation = m.is_lunar_ai_map
                     break
         else:
-            self._is_lunar_ai_formation = False
+            self._is_lunar_ai_formation = None
+
         return self.is_lunar_ai_formation
 
     @property
@@ -3502,6 +3514,32 @@ def lunar_ai_fix(filename=None):
         f.is_lunar_ai_formation
 
 
+def lunar_ai_sanity_check():
+    lunar_formations = [f for f in FormationObject.every if f.index < 0x100
+                        and AIFixObject.get_formation_ai(f)]
+    normal_formations = [f for f in FormationObject.every if f.index < 0x100
+                         and not AIFixObject.get_formation_ai(f)]
+    lunar_monsters = set([m for f in lunar_formations for m in f.monsters])
+    normal_monsters = set([m for f in normal_formations for m in f.monsters])
+    try:
+        assert not lunar_monsters & normal_monsters
+        lunar_path = path.join(tblpath, "lunar_monsters.txt")
+        f = open(lunar_path)
+        lines = f.readlines()
+        f.close()
+        lunars = set([])
+        for line in lines:
+            if not line.strip():
+                continue
+            index = int(line.split()[0], 0x10)
+            lunars.add(index)
+        lunars = set([MonsterObject.get(i) for i in lunars])
+        assert lunars >= lunar_monsters
+        assert not lunars & normal_monsters
+    except AssertionError:
+        print "WARNING: Enemy AI might be broken."
+
+
 def duplicate_learning_fix():
     FUNCTION_ADDR = addresses.dup_learn_function
     CALL_ADDR = addresses.dup_learn_call
@@ -3676,6 +3714,7 @@ if __name__ == "__main__":
         duplicate_learning_fix()
         warp_fix()
         setup_cave(segment_lengths)
+        lunar_ai_sanity_check()
 
         if DEBUG_MODE:
             for m in MonsterObject.every:
