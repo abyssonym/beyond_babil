@@ -903,6 +903,8 @@ def assign_formations(cluster_groups):
 
 def assign_treasure(cluster_groups):
     print "Assigning treasure..."
+    [p.buyable for p in PriceObject.every]
+
     all_chests = []
     for cg in cluster_groups:
         for m in cg.maps:
@@ -936,7 +938,7 @@ def assign_treasure(cluster_groups):
         item = share_mythic(candidates[index], candidates)
         c.misc3 = item.index
         c.misc2 = 0x80
-        if not item.is_medicine:
+        if item.is_battle_item or not item.is_medicine:
             candidates.remove(item)
 
     if not any([c.contents == 0xFB for c in all_chests]):
@@ -966,7 +968,7 @@ def assign_treasure(cluster_groups):
             f.set_bit("no_flee", True)
             findex = f.index - 448
             assert 0 <= findex < 0x40
-            chosen.misc2 = 0x40 | findex
+            chosen.misc2 = 0x80 | 0x40 | findex
 
     candidates = [p for p in PriceObject.every if not p.banned]
     candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
@@ -1026,29 +1028,19 @@ def assign_treasure(cluster_groups):
 
     done_equips = defaultdict(set)
     for s in ShopObject.every:
-        option = random.choice(["is_weapon", "is_armor", "is_consumable"])
+        option = random.choice(["is_weapon", "is_armor", "is_medicine",
+                                "is_battle_consumable"])
         candidates = [p for p in PriceObject.every if getattr(p, option)
                       and (p.is_arrows or p.price > 10) and p.sellable
                       and not (p.banned or p.rare_tool)]
 
-        if option == "is_consumable":
+        if option in ["is_medicine", "is_battle_consumable"]:
             candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
-            battle_cands = [p for p in candidates if p.is_battle_item
-                            or p.is_arrows]
-            med_cands = [p for p in candidates if p not in battle_cands]
-            num_battle = random.randint(0, random.randint(0, 8))
-
             items = []
-            while len(items) < num_battle:
-                max_index = len(battle_cands)-1
-                index = random.randint(0, random.randint(0, max_index))
-                chosen = battle_cands[index]
-                if chosen not in items:
-                    items.append(chosen)
             while len(items) < 8:
-                max_index = len(med_cands)-1
+                max_index = len(candidates)-1
                 index = random.randint(0, random.randint(0, max_index))
-                chosen = med_cands[index]
+                chosen = candidates[index]
                 if chosen not in items:
                     items.append(chosen)
 
@@ -2212,7 +2204,7 @@ class PriceObject(TableObject):
 
     @property
     def is_consumable(self):
-        return self.is_arrows or self.is_medicine or (
+        return self.is_arrows or self.is_medicine or self.is_battle_item or (
             self.index >= 0xde and not self.rare_tool)
 
     @property
@@ -2220,12 +2212,16 @@ class PriceObject(TableObject):
         return self.index <= 0xaf
 
     @property
+    def is_battle_consumable(self):
+        return self.is_consumable and not self.is_medicine
+
+    @property
     def is_battle_item(self):
-        return self.is_medicine and self.index <= 0xcd
+        return 0xb0 <= self.index <= 0xcd
 
     @property
     def is_medicine(self):
-        return 0xb0 <= self.index <= 0xdd
+        return 0xce <= self.index <= 0xdd
 
     @property
     def is_arrows(self):
@@ -2253,10 +2249,15 @@ class PriceObject(TableObject):
 
     @property
     def buyable(self):
+        if hasattr(self, "_buyable"):
+            return self._buyable
         for s in ShopObject.every:
             if self.index < 0xFF and self.index in s.items:
-                return True
-        return False
+                self._buyable = True
+                break
+        else:
+            self._buyable = False
+        return self.buyable
 
     @property
     def sellable(self):
@@ -2277,10 +2278,13 @@ class PriceObject(TableObject):
             if self.is_equipment and not self.is_arrows:
                 return self.price * 2
             else:
-                return self.price
+                if self.is_arrows:
+                    return self.price * 10
+                else:
+                    return self.price
         if self.sellable and self.price > 10:
             if self.is_equipment:
-                return self.price * 4
+                return 1000000
             else:
                 return self.price * 2
         return 1000000
@@ -2676,6 +2680,12 @@ class SpeechObject(EventCallObject):
 
 
 class ShopObject(TableObject):
+    def __repr__(self):
+        s = "SHOP %x" % self.index
+        for i in self.item_objects:
+            s += "\n%s" % i.name
+        return s
+
     @property
     def item_objects(self):
         return [PriceObject.get(i) for i in self.items]
@@ -3658,6 +3668,7 @@ if __name__ == "__main__":
 
         if get_global_label() == "FF2_US_11":
             undummy()
+
         lunar_ai_fix()
         duplicate_learning_fix()
         warp_fix()
