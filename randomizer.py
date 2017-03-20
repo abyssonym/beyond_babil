@@ -13,10 +13,10 @@ from collections import Counter
 import string
 
 
-VERSION = 1
+VERSION = 2
 ALL_OBJECTS = None
 LOCATION_NAMES = []
-DEBUG_MODE = False
+DEBUG_MODE = True
 RESEED_COUNTER = 0
 NUM_FLOORS, NUM_CHECKPOINTS = None, None
 
@@ -116,7 +116,7 @@ def write_credits():
     length = finish - start
     beginning = "".join(map(center_to_bytestr, [
         "FINAL FANTASY IV\n",
-        "BEYOND BABIL RANDOMIZER\n",
+        "BEYOND BABIL RANDOMIZER V.%s\n" % VERSION,
         "%s FLOORS %s CHECKPOINTS\n" % (NUM_FLOORS, NUM_CHECKPOINTS),
         "SEED %s\n\n\n" % get_seed(),
         "SPECIAL THANKS TO\n\n",
@@ -3730,6 +3730,6 @@ if __name__ == "__main__":
         write_credits()
         rewrite_snes_meta("FF4-R", VERSION, lorom=True)
         finish_interface()
-    except IOError, e:
+    except Exception, e:
         print "ERROR: %s" % e
         raw_input("Press Enter to close this program.")
