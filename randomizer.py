@@ -941,10 +941,6 @@ def assign_treasure(cluster_groups):
         if item.is_battle_item or not item.is_medicine:
             candidates.remove(item)
 
-    if not any([c.contents == 0xFB for c in all_chests]):
-        c = random.choice(all_chests)
-        c.misc3= 0xFB
-
     unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
     for cg in cluster_groups:
         candidates = sorted([c for m in cg.maps for c in m.chests],
@@ -1003,7 +999,10 @@ def assign_treasure(cluster_groups):
                 nonweird = nonweird or consume or random.choice([True, False])
         d.items = [i.index for i in items]
 
-    drops = MonsterDropObject.ranked
+    dmatdrop = MonsterDropObject.every[-1]
+    dmatdrop.items = [0xFB]*4
+
+    drops = [d for d in MonsterDropObject.ranked if d is not dmatdrop]
     monsters = [m for m in MonsterObject.ranked if m.rank > 0]
     max_drop, max_mon = len(drops)-1, float(len(monsters)-1)
     for i, m in enumerate(monsters):
@@ -1025,6 +1024,17 @@ def assign_treasure(cluster_groups):
             m.set_drop_rate(0)
         else:
             assert m.drop_rate > 0
+
+    bosses = [cg.boss for cg in cluster_groups][:-1]
+    if bosses:
+        max_index = len(bosses)-1
+        index = random.randint(random.randint(random.randint(
+            0, max_index), max_index), max_index)
+        boss = bosses[index]
+        monsters = sorted(set(boss.monsters))
+        monster = random.choice(monsters)
+        monster.set_drops(dmatdrop)
+        monster.set_drop_rate(3)
 
     done_equips = defaultdict(set)
     for s in ShopObject.every:
@@ -1493,16 +1503,9 @@ def generate_cave_layout(segment_lengths=None):
     TriggerObject.create_trigger(
         mapid=zemus.index, x=14, y=23,
         misc1=mapid, misc2=(x|0x80), misc3=y)
-    event = [
-        0xF7, 0xFB,
-        0xFE, lunar_whale.index, 12|0x80, 13, 0x00,
-        0xFA, lunar_whale.music,
-        0xFF,
-        ]
-    event_call = make_simple_event_call(event)
     TriggerObject.create_trigger(
         mapid=zemus.index, x=16, y=23,
-        misc1=0xFF, misc2=event_call.index, misc3=0x00)
+        misc1=lunar_whale.index, misc2=(12|0x80), misc3=13)
     for a in finish:
         TriggerObject.create_trigger(
             mapid=a.mapid, x=a.x, y=a.y,
