@@ -21,7 +21,7 @@ Contact:    https://twitter.com/abyssonym
 
 --- HOW TO USE ---
 Running the randomizer:
-    Windows users may use the executable file, "ff5gc.exe". Other users, please run "randomizer.py" using Python version 2.7.
+    Windows users may use the executable file, "ff4bb.exe". Other users, please run "randomizer.py" using Python version 2.7.
 
 Source rom file:
     This randomizer requires either the NA Final Fantasy II (v1.1) or JP Final Fantasy IV rom. Only the SNES and SFC versions are supported. FF4 Easytype is not supported. Note that due to the large number of differences between FF2 NA and FF4 JP, there may be some differences between the resulting randomizations. The supported (unheadered) rom versions have the following MD5 hashes:
@@ -36,6 +36,9 @@ Seed value:
 
 Output files:
     The randomizer will output a new, randomized rom with the seed in the filename.
+
+--- SPECIAL THANKS ---
+    To Pinkpuff, for creating FF4kster, FF4 Unprecedented Crisis, and the FF4 Roguelikeifyer (another AC type randomizer). FF4kster was a big help in finding data and checking my work.
 
 Like this randomizer? Be sure to check out my other projects:
     FF6 Beyond Chaos Randomizer
