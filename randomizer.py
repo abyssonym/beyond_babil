@@ -672,6 +672,8 @@ def assign_formations(cluster_groups):
     bosses.remove(zeromus)
     randoms = random.sample(nonbosses, 200)
     extras = [f for f in nonbosses if f not in randoms]
+    randoms += [x for x in extras if x.is_lunar_ai_formation]
+    extras = [f for f in extras if f not in randoms]
 
     randoms = sorted(randoms, key=lambda f: (f.rank, f.index))
     to_assign = list(randoms)
@@ -942,29 +944,48 @@ def assign_treasure(cluster_groups):
             candidates.remove(item)
 
     unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
+    for f in unused_formations:
+        AIFixObject.set_formation_ai(f.index, False)
     for cg in cluster_groups:
         candidates = sorted([c for m in cg.maps for c in m.chests],
                             key=lambda c2: (c2.chest_rank, c2.index))
         extras = sorted(cg.extras, key=lambda x: x.index)
+        extras = [x for x in extras if not x.is_lunar_ai_formation]
         if not (candidates and extras):
             continue
-        if len(extras) > len(candidates):
-            extras = random.sample(extras, len(candidates))
+        max_extras = min(len(extras), len(candidates))
+        extras = random.sample(
+            extras, random.randint(1, random.randint(1, max_extras)))
         assert len(candidates) >= len(extras)
         for x in extras:
             max_index = len(candidates)-1
             index = random.randint(random.randint(random.randint(
                 0, max_index), max_index), max_index)
             chosen = candidates[index]
+            myforms = [f for f in unused_formations
+                       if AIFixObject.get_formation_ai(f.index & 0xFF)
+                       == x.is_lunar_ai_formation]
+            if not myforms:
+                continue
             candidates.remove(chosen)
-            f = unused_formations.pop(0)
+            f = myforms.pop(0)
+            unused_formations.remove(f)
             f.copy_data(x)
             if f.battle_music == 3:
                 f.set_music(0)
             f.set_bit("no_flee", True)
             findex = f.index - 448
-            assert 0 <= findex < 0x40
+            assert findex >= 0
+            assert 0 <= findex <= 0x3F
             chosen.misc2 = 0x80 | 0x40 | findex
+
+            AIFixObject.set_formation_ai(f.index,
+                                         AIFixObject.get_formation_ai(x.index))
+            assert x.index < 0x100
+            assert (AIFixObject.get_formation_ai(f.index & 0xFF) ==
+                    AIFixObject.get_formation_ai(f.index) ==
+                    AIFixObject.get_formation_ai(x.index))
+            assert f.is_lunar_ai_formation == x.is_lunar_ai_formation
 
     candidates = [p for p in PriceObject.every if not p.banned]
     candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
@@ -3515,9 +3536,11 @@ def lunar_ai_fix(filename=None):
 
 
 def lunar_ai_sanity_check():
-    lunar_formations = [f for f in FormationObject.every if f.index < 0x100
+    lunar_formations = [f for f in FormationObject.every if
+                        (f.index < 0x100 or 448 <= f.index < (448+32))
                         and AIFixObject.get_formation_ai(f)]
-    normal_formations = [f for f in FormationObject.every if f.index < 0x100
+    normal_formations = [f for f in FormationObject.every if
+                         (f.index < 0x100 or 448 <= f.index < (448+32))
                          and not AIFixObject.get_formation_ai(f)]
     lunar_monsters = set([m for f in lunar_formations for m in f.monsters])
     normal_monsters = set([m for f in normal_formations for m in f.monsters])
