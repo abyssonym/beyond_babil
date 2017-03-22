@@ -2871,6 +2871,19 @@ class MapObject(TableObject):
             s += "WARP ?????\n"
         return s.strip()
 
+    @classmethod
+    def full_cleanup(cls):
+        treasure_index = 0
+        for m in MapObject.every:
+            if m.index == 0x100:
+                treasure_index = 0
+                break
+            elif m.index == 0x17f:
+                break
+            m.treasure_index = min(treasure_index, 0xFE)
+            treasure_index += len(m.chests)
+        super(MapObject, MapObject).full_cleanup()
+
     def get_cluster_health(self, clusters):
         if hasattr(self, "_cluster_health"):
             return self._cluster_health
