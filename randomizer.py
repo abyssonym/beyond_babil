@@ -13,7 +13,7 @@ from collections import Counter
 import string
 
 
-VERSION = 2
+VERSION = 3
 ALL_OBJECTS = None
 LOCATION_NAMES = []
 DEBUG_MODE = False
