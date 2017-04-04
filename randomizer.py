@@ -11,6 +11,7 @@ from os import path
 from time import time
 from collections import Counter
 import string
+import numpy
 
 
 VERSION = 3
@@ -2327,8 +2328,226 @@ class PriceObject(TableObject):
 
 
 class CommandNameObject(NameObject): pass
-class CharacterObject(TableObject): pass
+
+
+class CharacterObject(TableObject):
+    @property
+    def level_ups(self):
+        ls = [l for l in LevelUpObject.every if l.character is self]
+        if len(ls) == 1:
+            return ls[0]
+        return None
+
+    def cleanup(self):
+        self.current_hp = self.max_hp
+        self.current_mp = self.max_mp
+
+
 class InitialEquipObject(TableObject): pass
+
+
+class LevelUp:
+    def __init__(self, data=None):
+        if data is None:
+            return
+        self.amount = ord(data[0]) & 0b111
+        if self.amount == 7:
+            self.amount = -1
+        for i, attr in enumerate(["wil", "wis", "vit", "agi", "str"]):
+            setattr(self, attr, bool(ord(data[0]) & (1 << (i+3))))
+        self.hp = ord(data[1])
+        self.mp = ord(data[2]) & 0b00011111
+        self.xp = (((ord(data[2]) & 0b11100000) << 11)
+                   | (ord(data[4]) << 8)
+                   | ord(data[3]))
+        assert self.to_data() == data
+
+    def to_data(self):
+        data = ""
+        amount = self.amount if self.amount >= 0 else 7
+        for i, attr in enumerate(["wil", "wis", "vit", "agi", "str"]):
+            if getattr(self, attr):
+                amount |= (1 << (i+3))
+        data += chr(amount)
+        data += chr(self.hp)
+        data += chr(self.mp | ((self.xp >> 11) & 0b11100000))
+        data += chr(self.xp & 0xFF)
+        data += chr((self.xp >> 8) & 0xFF)
+        return data
+
+
+class LevelUpObject(TableObject):
+    @property
+    def character(self):
+        character_actors = {
+            10: 9,
+            13: 10,
+            17: 11,
+        }
+        if self.index in character_actors:
+            index = character_actors[self.index]
+        elif self.index < 9:
+            index = self.index
+        else:
+            return None
+        return CharacterObject.get(index)
+
+    @property
+    def valid(self):
+        return self.character is not None
+
+    def read_data(self, filename=None, pointer=None):
+        super(LevelUpObject, self).read_data(filename, pointer)
+        f = open(get_outfile(), "r+b")
+        f.seek(self.level_up_pointer | (self.pointer & 0xF8000))
+        self.levels = []
+        for i in xrange(69):
+            data = f.read(5)
+            self.levels.append(LevelUp(data))
+        self.final = f.read(8)
+        f.close()
+
+    def extrapolate_lower_levels(self):
+        initial_level = self.character.level
+        levels = self.levels[initial_level-1:]
+        prelevels = [LevelUp() for _ in xrange(69-len(levels))]
+        DEGREE = 5
+        assert len(prelevels + levels) == 69
+        attr_pairs = {}
+        for attr in ["hp", "mp", "xp", "str", "agi", "vit", "wis", "wil"]:
+            if attr in ["hp", "mp"]:
+                initial_attr = "max_%s" % attr
+            else:
+                initial_attr = attr
+            value = getattr(self.character, initial_attr)
+            values = [value]
+            for l in levels:
+                if attr in ["hp", "mp", "xp"]:
+                    value += getattr(l, attr)
+                elif getattr(l, attr):
+                    value += l.amount
+                values.append(value)
+            pairs = [(i+initial_level, v) for (i, v) in enumerate(values)]
+            if attr == "xp" and (1, 0) not in pairs:
+                pairs = [(1, 0)] + pairs
+            xs, ys = zip(*pairs)
+            xs, ys = list(xs), list(ys)
+            pairs = dict(pairs)
+            coefficients = list(reversed(numpy.polyfit(xs, ys, DEGREE)))
+            value = 0
+            for d in xrange(DEGREE+1):
+                value += coefficients[d]
+            if int(round(value)) < 0:
+                xs = [0] + xs
+                if attr == "hp":
+                    ys = [30] + ys
+                elif attr == "mp":
+                    ys = [0] + ys
+                else:
+                    ys = [1] + ys
+                coefficients = list(reversed(numpy.polyfit(xs, ys, DEGREE)))
+
+            for i in xrange(1, 71):
+                if i in pairs:
+                    continue
+                assert i < 50
+                value = 0
+                for d in xrange(DEGREE+1):
+                    value += coefficients[d] * (i**d)
+                if int(round(value)) < 0:
+                    print attr, i, int(round(value))
+                value = max(int(round(value)), 0)
+                pairs[i] = value
+
+            if attr in ["hp", "mp", "xp"]:
+                for key in reversed(sorted(pairs.keys())):
+                    if key-1 in pairs and pairs[key] <= pairs[key-1]:
+                        if attr == "xp":
+                            pairs[key-1] = max(pairs[key]-1, 0)
+                        else:
+                            pairs[key-1] = pairs[key]
+                values = [v for (k, v) in sorted(pairs.items())]
+                assert values == sorted(values)
+            attr_pairs[attr] = pairs
+
+        levels = prelevels + levels
+        for attr in ["hp", "mp", "xp"]:
+            for i in reversed(range(0, initial_level-1)):
+                value = attr_pairs[attr][i+2] - attr_pairs[attr][i+1]
+                setattr(levels[i], attr, value)
+
+        attr_vals = dict([(attr, getattr(self.character, attr))
+                          for attr in ("str", "agi", "vit", "wis", "wil")])
+        for i in reversed(range(1, initial_level)):
+            differences = dict([(attr, attr_vals[attr] - attr_pairs[attr][i])
+                                for attr in attr_vals])
+            positives = [p for p in differences.values() if p > 0]
+            negatives = [n for n in differences.values() if n < 0]
+            l = levels[i-1]
+            if sum(positives) > abs(sum(negatives)) or not negatives:
+                posavg = sum(positives) / float(len(positives))
+                l.amount = min(int(round(posavg)), 6)
+            else:
+                l.amount = -1
+            for attr in attr_vals:
+                diff = differences[attr]
+                if (abs(diff-l.amount) < abs(diff) and
+                        (l.amount <= 0 or (attr_vals[attr]-l.amount > 0))):
+                    setattr(l, attr, True)
+                    attr_vals[attr] -= l.amount
+                else:
+                    setattr(l, attr, False)
+
+        self.levels = levels
+        assert len(self.levels) == 69
+
+    def delevel_character(self):
+        if not self.valid:
+            return
+        self.extrapolate_lower_levels()
+        while self.character.level > 1:
+            level = self.levels[self.character.level-2]
+            self.character.max_hp -= level.hp
+            self.character.max_mp -= level.mp
+            self.character.xp -= level.xp
+            assert self.character.max_hp > 0
+            assert self.character.max_mp >= 0
+            assert self.character.xp >= 0
+            for attr in ["str", "agi", "vit", "wis", "wil"]:
+                if getattr(level, attr):
+                    value = getattr(self.character, attr)
+                    value -= level.amount
+                    assert value > 0
+                    setattr(self.character, attr, value)
+            self.character.level -= 1
+        assert self.character.xp == 0
+        self.character.tnl = 0
+
+    def write_data(self, filename=None, pointer=None):
+        super(LevelUpObject, self).write_data(filename, pointer)
+        if not self.valid:
+            return None
+        f = open(get_outfile(), "r+b")
+        f.seek(self.level_up_pointer | (self.pointer & 0xF8000))
+        assert len(self.levels) == 69
+        for l in self.levels:
+            f.write(l.to_data())
+        f.write(self.final)
+        pointer = f.tell()
+        f.close()
+        return pointer
+
+    @classmethod
+    def write_all(cls, filename):
+        base_pointer = max([l.pointer for l in LevelUpObject.every]) + 2
+        pointer = base_pointer
+        for l in LevelUpObject.every:
+            if not l.valid:
+                l.level_up_pointer = base_pointer & 0xFFFF
+                l.write_data()
+                continue
+            l.level_up_pointer = pointer & 0xFFFF
+            pointer = l.write_data()
 
 
 class LearnedSpellObject(TableObject):
@@ -3745,6 +3964,9 @@ if __name__ == "__main__":
 
         if get_global_label() == "FF2_US_11":
             undummy()
+
+        for l in LevelUpObject.every:
+            l.delevel_character()
 
         lunar_ai_fix()
         duplicate_learning_fix()

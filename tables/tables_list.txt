@@ -29,7 +29,7 @@ PriceObject         price_table.txt             7a450   256
 CommandNameObject   command_name_table.txt      7a7c6   26
 CharacterObject     character_table.txt         7a900   16
 InitialEquipObject  initial_equip_table.txt     7ab00   20
-#LevelUpObject       level_up_table.txt          7b500   20
+LevelUpObject       level_up_table.txt          7b500   20
 LearnedSpellObject  learned_spell_table.txt     7c700   13      delimit 255
 InitialSpellObject  initial_spell_table.txt     7c8c0   13      delimit 255
 EventObject         event_table.txt             90000   256

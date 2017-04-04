@@ -1,4 +1,1 @@
-stats,bit:v1 v2 v3 wil wis vit agi str
-hp,1
-mp_xphigh,1
-xp,2
+level_up_pointer,2
