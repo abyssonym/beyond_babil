@@ -2215,6 +2215,22 @@ class EquipmentObject(TableObject):
     def equip_index(self):
         return self.equip_code & 0x1f
 
+    @property
+    def is_weapon(self):
+        return self.index <= 0x5F
+
+    @property
+    def is_arrows(self):
+        return 0x54 <= self.index <= 0x5f
+
+    @property
+    def is_armor(self):
+        return not self.is_weapon
+
+    @property
+    def rank(self):
+        return PriceObject.get(self.index).rank
+
 
 class MedicineObject(TableObject):
     @property
@@ -2327,10 +2343,19 @@ class PriceObject(TableObject):
         return 1000000
 
 
+class EquipJobsObject(TableObject): pass
 class CommandNameObject(NameObject): pass
 
 
 class CharacterObject(TableObject):
+    @property
+    def left_handed(self):
+        return bool(self.handedness_charid & 0x40)
+
+    @property
+    def right_handed(self):
+        return bool(self.handedness_charid & 0x80)
+
     @property
     def level_ups(self):
         ls = [l for l in LevelUpObject.every if l.character is self]
@@ -2338,12 +2363,34 @@ class CharacterObject(TableObject):
             return ls[0]
         return None
 
+    @property
+    def equippable_items(self):
+        job_mask = (1 << self.index)
+        equip_indexes = [e.index for e in EquipJobsObject.every
+                         if e.equip_jobs & job_mask]
+        equipment = [e for e in EquipmentObject.ranked
+                     if e.equip_index in equip_indexes]
+        return equipment
+
+    @property
+    def weakest_weapon(self):
+        try:
+            chosen = sorted([c for c in self.equippable_items if
+                             c.is_weapon and c.equip_index != 2
+                             and c.rank > 0], key=lambda e: e.rank)[0]
+        except IndexError:
+            return None
+        return chosen
+
     def cleanup(self):
         self.current_hp = self.max_hp
         self.current_mp = self.max_mp
 
 
-class InitialEquipObject(TableObject): pass
+class InitialEquipObject(TableObject):
+    @property
+    def character(self):
+        return LevelUpObject.get(self.index).character
 
 
 class LevelUp:
@@ -3628,9 +3675,38 @@ def setup_cave(segment_lengths):
         if len(m.npc_placements) == 0:
             m.npc_placement_index = PlacementObject.canonical_zero
 
+    exceptions = {5: (0x54, 0x4d),
+                  4: (0x44, 0x00),
+                  17: (0x02, 0x00),
+                 }
     for i in InitialEquipObject.every:
         for attr, _, _ in InitialEquipObject.specsattrs:
             setattr(i, attr, 0)
+        if i.index in exceptions:
+            right, left = exceptions[i.index]
+            i.left = left
+            i.right = right
+            if EquipmentObject.get(left).is_arrows:
+                i.left_qty = 10
+            elif left:
+                i.left_qty = 1
+            if EquipmentObject.get(right).is_arrows:
+                i.right_qty = 10
+            elif right:
+                i.right_qty = 1
+            continue
+        c = i.character
+        if c is None:
+            continue
+        weapon = c.weakest_weapon
+        if weapon is None:
+            continue
+        if c.left_handed and not c.right_handed:
+            i.left = weapon.index
+            i.left_qty = 1
+        else:
+            i.right = weapon.index
+            i.right_qty = 1
 
     CommandObject.get(2).commands = CommandObject.get(0x10).commands
     event_spells = [
