@@ -1,32 +1,32 @@
-b0| Bomb
-b1| Big Bomb
-b2| Notus
-b3| Boreas
-b4| ThorRage
-b5| ZeusRage
-b6| Stardust
-b7| Succubus
-b8| Vampire
-b9| Bacchus
-ba| Hermes
-bb| HrGlass1
-bc| HrGlass2
-bd| HrGlass3
-be| Silk Web
-bf| Illusion
-c0| Inferno
-c1| Blizzard
-c2| LitStorm
-c3| StarVeil
-c4| Kamikaze
-c5| MoonVeil
-c6| MuteBell
-c7| GaiaDrum
-c9| Coffin
-ca| Grimore
-cb| Bestiary
-cc| Alarm
-cd| Unihorn
+b0|$15|Bomb
+b1|$15|Big|$15|Bomb
+b2|$15|Notus
+b3|$15|Boreas
+b4|$15|ThorRage
+b5|$15|ZeusRage
+b6|$15|Stardust
+b7|$15|Succubus
+b8|$15|Vampire
+b9|$15|Bacchus
+ba|$15|Hermes
+bb|$15|HrGlass1
+bc|$15|HrGlass2
+bd|$15|HrGlass3
+be|$15|Silk|$15|Web
+bf|$15|Illusion
+c0|$15|Inferno
+c1|$15|Blizzard
+c2|$15|LitStorm
+c3|$15|StarVeil
+c4|$15|Kamikaze
+c5|$15|MoonVeil
+c6|$15|MuteBell
+c7|$15|GaiaDrum
+c9|$15|Coffin
+ca|$15|Grimore
+cb|$15|Bestiary
+cc|$15|Alarm
+cd|$15|Unihorn
 d5|$7a|Soft
 d6|$7a|MaidKiss
 d7|$7a|Mallet
@@ -35,14 +35,14 @@ d9|$7a|EchoNote
 da|$7a|Eyedrops
 db|$7a|Antidote
 dc|$7a|Cross
-de| Alert
-df| Au Apple
-e0| Ag Apple
-e1| SomaDrop
-e4| Smut
-e5| Exit
-e6| EagleEye
+de|$15|Alert
+df|$15|Au|$15|Apple
+e0|$15|Ag|$15|Apple
+e1|$15|SomaDrop
+e4|$15|Smut
+e5|$15|Exit
+e6|$15|EagleEye
 e9|$41|Cocatris
-fb| DkMatter
-fc| Dummy
-fd| Dummy
+fb|$15|DkMatter
+fc|$15|Dummy
+fd|$15|Dummy
