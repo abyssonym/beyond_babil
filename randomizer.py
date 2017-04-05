@@ -315,6 +315,10 @@ class Cluster(ReprSortMixin):
             [str(x) for x in sorted(self.exits)])
 
     @property
+    def damage_floors(self):
+        return MapObject.reverse_grid_index_canonical(self.mapid).damage_floors
+
+    @property
     def canonical_mapid(self):
         return MapObject.reverse_grid_index_canonical(self.mapid).index
 
@@ -1819,6 +1823,19 @@ def generate_cave_layout(segment_lengths=None):
             price = ((rank/3)**3) + ((rank/2)**2) + rank
             PriceObject.get(0xEC).set_price(price)
 
+    for cg in cluster_groups:
+        for c in cg.clusters:
+            if c.damage_floors:
+                rank = cg.base_rank + c.rank
+                f = open(get_outfile(), "r+b")
+                f.seek(addresses.damage_floor_amount)
+                f.write(chr(rank+1))
+                f.close()
+                break
+        else:
+            continue
+        break
+
     return cluster_groups, lungs
 
 
@@ -3299,6 +3316,16 @@ class MapObject(TableObject):
                 tile = self.map[y][x]
                 tile = TileObject.get((128*self.tileset_index)+tile)
                 if tile.get_bit("save_point"):
+                    return True
+        return False
+
+    @property
+    def damage_floors(self):
+        for y in xrange(32):
+            for x in xrange(32):
+                tile = self.map[y][x]
+                tile = TileObject.get((128*self.tileset_index)+tile)
+                if tile.get_bit("damage_floor"):
                     return True
         return False
 

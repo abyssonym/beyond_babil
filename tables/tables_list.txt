@@ -69,3 +69,4 @@ $dup_learn_function     1f210
 $dup_learn_call         1f178
 $warp_fix_start         1ad1
 $warp_fix_limit         1b14
+$damage_floor_amount    1608
