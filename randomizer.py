@@ -1392,7 +1392,7 @@ def generate_cave_layout(segment_lengths=None):
 
     bgm_candidates = [
         6, 13, 49,                              # overworld themes
-        12, 23, 25, 27, 28, 30, 37, 40, 52,     # dungeon themes
+        12, 23, 25, 27, 28, 37, 40, 52,         # dungeon themes
         20, 32, 46, 50,                         # castle themes
         51,                                     # town themes
         #15,                                     # misc themes
