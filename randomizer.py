@@ -2454,8 +2454,6 @@ class LevelUpObject(TableObject):
                 value = 0
                 for d in xrange(DEGREE+1):
                     value += coefficients[d] * (i**d)
-                if int(round(value)) < 0:
-                    print attr, i, int(round(value))
                 value = max(int(round(value)), 0)
                 pairs[i] = value
 
@@ -2548,6 +2546,12 @@ class LevelUpObject(TableObject):
                 continue
             l.level_up_pointer = pointer & 0xFFFF
             pointer = l.write_data()
+
+    def reduce_xp(self):
+        for i, l in enumerate(self.levels):
+            ratio = min(i / 50.0, 1.0)**2
+            value = (l.xp * ratio) + (l.xp * (1-ratio) / 8.0)
+            l.xp = int(round(value))
 
 
 class LearnedSpellObject(TableObject):
@@ -3628,9 +3632,6 @@ def setup_cave(segment_lengths):
         for attr, _, _ in InitialEquipObject.specsattrs:
             setattr(i, attr, 0)
 
-    for mxp in MonsterXPObject.every:
-        mxp.xp = min(mxp.xp*2, 65000)
-
     CommandObject.get(2).commands = CommandObject.get(0x10).commands
     event_spells = [
         (0x1d, 3), (0x1e, 3), (0x21, 3), (0x24, 3),
@@ -3967,6 +3968,7 @@ if __name__ == "__main__":
 
         for l in LevelUpObject.every:
             l.delevel_character()
+            l.reduce_xp()
 
         lunar_ai_fix()
         duplicate_learning_fix()
