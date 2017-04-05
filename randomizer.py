@@ -1810,7 +1810,7 @@ def generate_cave_layout(segment_lengths=None):
             for cg in cluster_groups:
                 for c in cg.clusters:
                     if c.canonical_mapid == mapid:
-                        rank = cg.base_rank + c.rank
+                        rank = float(cg.base_rank + c.rank + 1)
                         break
                 if rank > 0:
                     break
@@ -1821,6 +1821,7 @@ def generate_cave_layout(segment_lengths=None):
             shop.items.remove(toss)
             shop.items = [0xEC] + shop.items
             price = ((rank/3)**3) + ((rank/2)**2) + rank
+            price = max(price, 10)
             PriceObject.get(0xEC).set_price(price)
 
     for cg in cluster_groups:
