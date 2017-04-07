@@ -933,7 +933,8 @@ def assign_treasure(cluster_groups):
     random.shuffle(indexed_chests)
     for i, c in indexed_chests:
         if not candidates:
-            candidates = [p for p in PriceObject.every if not p.banned]
+            candidates = [p for p in PriceObject.every
+                          if not (p.banned or p.is_initial_equipment)]
             candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
         rank = i / max_chest
         max_item = len(candidates)-1
@@ -945,7 +946,7 @@ def assign_treasure(cluster_groups):
         item = share_mythic(candidates[index], candidates)
         c.misc3 = item.index
         c.misc2 = 0x80
-        if item.is_battle_item or not item.is_medicine:
+        if not (item.is_medicine or item.is_arrows):
             candidates.remove(item)
 
     unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
@@ -996,6 +997,7 @@ def assign_treasure(cluster_groups):
     candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
     nonweirds = [c for c in candidates if c.is_medicine or c.is_equipment
                  or c.is_battle_item or (c.is_consumable and c.buyable)]
+    nonweirds = [c for c in nonweirds if not c.is_initial_equipment]
     consumables = [c for c in nonweirds if c.is_consumable]
     for d in MonsterDropObject.every:
         consume = False
@@ -1039,15 +1041,15 @@ def assign_treasure(cluster_groups):
         index = (a * (1-rank)) + (b * rank)
         index = int(round(index))
         m.set_drops(drops[index])
-        if m.common:
-            drop_rate = 1 + random.randint(
-                0, random.randint(0, random.randint(0, 2)))
+        if not m.get_bit("boss") or m.common:
+            drop_rate = 1 + random.randint(0, random.randint(0, 1))
         else:
             drop_rate = 1 + random.randint(0, 1) + random.randint(0, 1)
         m.set_drop_rate(drop_rate)
     for m in MonsterObject.every:
         if m.rank <= 0:
             m.set_drop_rate(0)
+            m.set_drops(0)
         else:
             assert m.drop_rate > 0
 
@@ -1064,8 +1066,7 @@ def assign_treasure(cluster_groups):
 
     done_equips = defaultdict(set)
     for s in ShopObject.every:
-        option = random.choice(["is_weapon", "is_armor", "is_medicine",
-                                "is_battle_consumable"])
+        option = random.choice(["is_weapon", "is_armor", "is_medicine"])
         candidates = [p for p in PriceObject.every if getattr(p, option)
                       and (p.is_arrows or p.price > 10) and p.sellable
                       and not (p.banned or p.rare_tool)]
@@ -1083,7 +1084,8 @@ def assign_treasure(cluster_groups):
             s.items = sorted([i.index for i in items])
             continue
 
-        candidates = [c for c in candidates if c.buyable]
+        candidates = [c for c in candidates
+                      if c.buyable and not c.is_initial_equipment]
         equip_indexes = set([])
         for c in candidates:
             e = EquipmentObject.get(c.index)
@@ -2246,6 +2248,16 @@ class EquipmentObject(TableObject):
         return not self.is_weapon
 
     @property
+    def is_initial_equipment(self):
+        if self.is_arrows:
+            return False
+        for ie in InitialEquipObject.every:
+            for attr in ["head", "armor", "wrist", "right", "left"]:
+                if getattr(ie, attr) == self.index:
+                    return True
+        return False
+
+    @property
     def rank(self):
         return PriceObject.get(self.index).rank
 
@@ -2281,6 +2293,12 @@ class PriceObject(TableObject):
     @property
     def is_equipment(self):
         return self.index <= 0xaf
+
+    @property
+    def is_initial_equipment(self):
+        if self.is_weapon or self.is_armor:
+            return EquipmentObject.get(self.index).is_initial_equipment
+        return False
 
     @property
     def is_battle_consumable(self):
@@ -2353,6 +2371,11 @@ class PriceObject(TableObject):
                     return self.price * 10
                 else:
                     return self.price
+        if self.sellable and self.is_battle_consumable:
+            if self.price <= 10 or self.index in [0xC0, 0xC1, 0xC2]:
+                return 5000
+            else:
+                return self.price * 5
         if self.sellable and self.price > 10:
             if self.is_equipment:
                 return 1000000
