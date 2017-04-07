@@ -2609,6 +2609,25 @@ class LevelUpObject(TableObject):
         assert self.character.xp == 0
         self.character.tnl = 0
 
+    def relevel_character(self, target_level):
+        if not self.valid:
+            return
+
+        while self.character.level < target_level:
+            level = self.levels[self.character.level-1]
+            self.character.max_hp += level.hp
+            self.character.max_mp += level.mp
+            self.character.xp += level.xp
+            self.character.tnl += level.xp
+            for attr in ["str", "agi", "vit", "wis", "wil"]:
+                if getattr(level, attr):
+                    value = getattr(self.character, attr)
+                    value += level.amount
+                    assert value > 0
+                    setattr(self.character, attr, value)
+            self.character.level += 1
+        assert self.character.level >= level
+
     def write_data(self, filename=None, pointer=None):
         super(LevelUpObject, self).write_data(filename, pointer)
         if not self.valid:
@@ -2637,7 +2656,7 @@ class LevelUpObject(TableObject):
 
     def reduce_xp(self):
         for i, l in enumerate(self.levels):
-            ratio = min(i / 50.0, 1.0)**2
+            ratio = min(i / 60.0, 1.0)**2
             value = (l.xp * ratio) + (l.xp * (1-ratio) / 8.0)
             l.xp = int(round(value))
 
@@ -4096,6 +4115,7 @@ if __name__ == "__main__":
         for l in LevelUpObject.every:
             l.delevel_character()
             l.reduce_xp()
+            l.relevel_character(5)
 
         lunar_ai_fix()
         duplicate_learning_fix()
