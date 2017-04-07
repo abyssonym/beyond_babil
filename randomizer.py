@@ -2065,7 +2065,8 @@ class NameObject(TableObject):
                 s += "?"
         return s.rstrip(' ')
 
-    def rename(self, name):
+    @classmethod
+    def generate_name_bytes(cls, name):
         s = ""
         if isinstance(name, basestring):
             name = [name]
@@ -2074,6 +2075,10 @@ class NameObject(TableObject):
                 s += chr(int(n[1:], 0x10))
             else:
                 s += text_to_bytestr(n)
+        return s
+
+    def rename(self, name):
+        s = self.generate_name_bytes(name)
         self.text = map(ord, s)
         while len(self.text) < self.total_size:
             self.text += [ord(text_to_bytestr(' '))]
@@ -3660,6 +3665,7 @@ class MapGrid2Object(MapGridObject):
 def setup_opening_event(mapid=0, x=16, y=30):
     chosen = random.choice(range(0, 9) + [10, 13, 17])
     new_event = [
+        0xE0, 0xFD,                 # consumable save
         0xFA, 0x0E,                 # play lunar whale theme
         0xE8, 0x01,                 # remove DK cecil
         0xE7, chosen+1,             # random starting character
@@ -4111,6 +4117,15 @@ if __name__ == "__main__":
 
         if get_global_label() == "FF2_US_11":
             undummy()
+        else:
+            f = open(get_outfile(), "r+b")
+            f.seek(addresses.scenario0016)
+            bytestr = NameObject.generate_name_bytes(
+                    ["$D7", "$C2", "$3A", "$A2", "$92", "$7C", "$8F", "$8B"])
+            while len(bytestr) < 8:
+                bytestr += chr(0xFF)
+            f.write(bytestr)
+            f.close()
 
         for l in LevelUpObject.every:
             l.delevel_character()

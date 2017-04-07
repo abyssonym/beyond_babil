@@ -57,3 +57,5 @@ $dup_learn_call         1f17d
 $warp_fix_start         1cef
 $warp_fix_limit         1d32
 $damage_floor_amount    1826
+$scenario0016           788e6
+.patch                  consumable_saves_jp.txt

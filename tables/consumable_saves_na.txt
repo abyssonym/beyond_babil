@@ -1,0 +1,8 @@
+# patch authored by twitch.tv/myself086
+007e00: bd 40 14 c9  fd f0 03 c9  fe 6b a9 01  8d 02 1a 22 
+007e10: 1a fe 00 68  68 68 5c 60  87 01 de 41  14 d0 03 9e 
+007e20: 40 14 6b
+
+00a17d: fd 90
+
+00a308: 22 00 fe 00 ea

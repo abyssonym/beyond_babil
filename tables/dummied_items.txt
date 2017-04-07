@@ -1,5 +1,5 @@
 b0|$15|Bomb
-b1|$15|Big|$15|Bomb
+b1|$15|BigBomb
 b2|$15|Notus
 b3|$15|Boreas
 b4|$15|ThorRage
@@ -12,7 +12,7 @@ ba|$15|Hermes
 bb|$15|HrGlass1
 bc|$15|HrGlass2
 bd|$15|HrGlass3
-be|$15|Silk|$15|Web
+be|$15|SilkWeb
 bf|$15|Illusion
 c0|$15|Inferno
 c1|$15|Blizzard
@@ -36,8 +36,8 @@ da|$7a|Eyedrops
 db|$7a|Antidote
 dc|$7a|Cross
 de|$15|Alert
-df|$15|Au|$15|Apple
-e0|$15|Ag|$15|Apple
+df|$15|AuApple
+e0|$15|AgApple
 e1|$15|SomaDrop
 e4|$15|Smut
 e5|$15|Exit
@@ -45,4 +45,4 @@ e6|$15|EagleEye
 e9|$41|Cocatris
 fb|$15|DkMatter
 fc|$15|Dummy
-fd|$15|Dummy
+fd|$7d|SavePt
