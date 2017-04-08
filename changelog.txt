@@ -1,0 +1,11 @@
+Version 4:
+- Most save points have been eliminated and replaced with consumable save crystals, each will enable the save feature of the menu until the player exits the menu or resets the game. These crystals can be used anywhere but are very rare. You start with one in your inventory for free.
+- Fast menus and Y-dashing are now optional features in the US version.
+- All characters now begin at level 5 with estimated level up stats.
+- One-way exits have been removed and replaced with unlockable shortcuts.
+- DkMatter is no longer guaranteed as a boss drop, but will be in a chest somewhere in the dungeon, favoring the later areas.
+- Item names will now appear for all opened chests.
+- Damage floors are scaled to where they appear in the dungeon, i.e. they won't do 50 damage to you on floor 2.
+- Each character starts with a weak weapon, meant to enable their battle commands where applicable.
+- Enemies no longer give double exp, but the exp curve has been altered to favor rapid level ups early on. Given that enemies (esp. bosses) are no longer hitting the exp cap, level up should be easier in general.
+- The rarity of a lot of treasure has been adjusted to reflect its true value (for example, the Blizzard/Inferno/LitStorm items)

@@ -1,6 +1,6 @@
 Final Fantasy 4 "Beyond Babil" Randomizer
-Version:    3
-Date:       March 21, 2017
+Version:    4
+Date:       April 08, 2017
 URL:        https://github.com/abyssonym/beyond_babil
 Contact:    https://twitter.com/abyssonym
             https://www.twitch.tv/abyssonym
@@ -38,7 +38,11 @@ Output files:
     The randomizer will output a new, randomized rom with the seed in the filename.
 
 --- SPECIAL THANKS ---
-    To Pinkpuff, for creating FF4kster, FF4 Unprecedented Crisis, and the FF4 Roguelikeifyer (another AC type randomizer). FF4kster was a big help in finding data and checking my work.
+    Myself086 ( twitch.tv/myself086 ) for consultation and various ASM hacks including:
+        Consumable save points
+        Fast menus
+        Y-button dash
+    Pinkpuff, for creating FF4kster, FF4 Unprecedented Crisis, and the FF4 Roguelikeifyer (another AC type randomizer). FF4kster was a big help in finding data and checking my work.
 
 Like this randomizer? Be sure to check out my other projects:
     FF6 Beyond Chaos Randomizer
@@ -55,3 +59,5 @@ Like this randomizer? Be sure to check out my other projects:
         https://github.com/abyssonym/smrpg_gbarp
     FF5 Grand Cross Randomizer
         https://github.com/abyssonym/grand_cross
+    Castlevania: Aria of Sorrow Item Randomizer
+        https://github.com/abyssonym/aos_rando

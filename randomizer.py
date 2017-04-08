@@ -14,7 +14,7 @@ import string
 #import numpy
 
 
-VERSION = 3
+VERSION = 4
 ALL_OBJECTS = None
 LOCATION_NAMES = []
 DEBUG_MODE = False
