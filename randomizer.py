@@ -2748,7 +2748,7 @@ class LevelUpObject(TableObject):
                     assert value > 0
                     setattr(self.character, attr, value)
             self.character.level += 1
-        assert self.character.level >= level
+        assert self.character.level >= target_level
 
     def write_data(self, filename=None, pointer=None):
         super(LevelUpObject, self).write_data(filename, pointer)
