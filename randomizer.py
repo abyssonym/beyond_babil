@@ -247,6 +247,11 @@ class ClusterExit(ReprSortMixin):
             abs(self.x-other.x) == 1 or abs(self.y-other.y) == 1)
 
     @property
+    def adjacencies(self):
+        return set([x for x in self.cluster.exits
+                    if self is x or self.is_adjacent(x)])
+
+    @property
     def rank(self):
         return self.cluster.rank
 
@@ -558,19 +563,7 @@ class ClusterGroup:
         done = set([])
         for i, (a, b) in enumerate(self.connections):
             if b is None:
-                ranked_clusters = sorted(self.clusters,
-                                         key=lambda c: (c.rank, c))
-                index = ranked_clusters.index(a)
-                ranked_clusters = [r for r in ranked_clusters
-                                   if r not in (self.start, self.finish)]
-                max_index = len(ranked_clusters)-1
-                index = max(0, min(index-1, max_index))
-                b = random.randint(0, max_index)
-                if index <= b:
-                    b = random.randint(index, b)
-                else:
-                    b = random.randint(b, index)
-                b = ranked_clusters[b].adjacencies
+                continue
             else:
                 b = [bb for bb in b.adjacencies if bb not in done]
             a = [aa for aa in a.adjacencies if aa not in done]
@@ -584,20 +577,21 @@ class ClusterGroup:
             done.add(b)
 
         start = [a for a in self.start.adjacencies if a not in done]
-        assert len(start) == 1
-        self.start = start[0]
+        self.start = random.choice(start)
         finish = [a for a in self.finish.adjacencies if a not in done]
-        assert len(finish) == 1
-        self.finish = finish[0]
+        self.finish = random.choice(finish)
+        assert 2 <= len(start + finish) <= 3
         done.add(self.start)
         done.add(self.finish)
-        for c in self.clusters:
-            for a in c.adjacencies:
-                assert a in done
+        #for c in self.clusters:
+        #    for a in c.adjacencies:
+        #        assert a in done
 
         self.connections = new_connections
-        assert self.unconnected_exits == (set([x for x in self.start]) |
-                                          set([x for x in self.finish]))
+        self.special_exits = (
+            self.unconnected_exits - set(self.start + self.finish))
+        #assert self.unconnected_exits <= (
+        #    set([x for x in self.start]) | set([x for x in self.finish]))
 
     def full_execute(self):
         for _ in xrange(10):
@@ -1702,6 +1696,36 @@ def generate_cave_layout(segment_lengths=None):
         lung_battle_bgs.append(b)
     random.shuffle(lung_battle_bgs)
 
+    special_exits = [cg.special_exits for cg in cluster_groups
+                     if cg.special_exits]
+    if len(special_exits) == 1:
+        last_exit = special_exits.pop()
+    elif len(special_exits) % 2:
+        last_exit = random.choice(special_exits[1:-1])
+        special_exits.remove(last_exit)
+    else:
+        last_exit = None
+
+    if last_exit:
+        for xx in last_exit:
+            for x in xx.adjacencies:
+                x.create_exit_trigger(x.mapid, x.x, x.y)
+
+    paired_exits = [(x1, x2) for (i, (x1, x2)) in enumerate(zip(
+                    special_exits, special_exits[1:])) if not i % 2]
+    assert not len(special_exits) % 2
+    assert len(paired_exits) == len(special_exits) / 2
+
+    sealed_event = [
+        0xF0, 0x18,
+        0xFF,
+        ]
+    candidate_events = [e for e in unused_events
+                        if e.size >= len(sealed_event)]
+    sealed_chosen = candidate_events.pop(0)
+    unused_events.remove(sealed_chosen)
+    sealed_chosen.overwrite_event(sealed_event)
+
     LUNG_SONG = 2  # long way to go
     lungs = []
     counter = 0
@@ -1794,6 +1818,49 @@ def generate_cave_layout(segment_lengths=None):
         t = TriggerObject.create_trigger(
             mapid=lung.index, x=15, y=15,
             misc1=0xFF, misc2=event_call.index, misc3=0)
+
+        my_special_exits = bb[0].cluster_group.special_exits
+        pair = [(p1, p2) for (p1, p2) in paired_exits
+                if p2 == my_special_exits]
+        if pair:
+            a2, b2 = pair[0]
+            a2 = sorted(a2)[0].adjacencies
+            ax = sum([a.xx for a in a2]) / len(a2)
+            ay = sum([a.yy for a in a2]) / len(a2)
+            b2 = sorted(b2)[0].adjacencies
+            bx = sum([b.xx for b in b2]) / len(b2)
+            by = sum([b.yy for b in b2]) / len(b2)
+            amap = list(set([a.mapid for a in a2]))
+            bmap = list(set([b.mapid for b in b2]))
+            assert len(amap) == len(bmap) == 1
+            amap = amap[0]
+            bmap = bmap[0]
+            for b in b2:
+                b.create_exit_trigger(amap, ax, ay)
+
+            unsealed_event = [
+                0xFE, bmap, bx|0x80, by, 0x00,
+                0xFA, bb[0].cluster_group.music,
+                0xFF,
+                ]
+            candidate_events = [e for e in unused_events
+                                if e.size >= len(unsealed_event)]
+            unsealed_chosen = candidate_events.pop(0)
+            unused_events.remove(unsealed_chosen)
+            unsealed_chosen.overwrite_event(unsealed_event)
+
+            cases = [([(flag, False)], sealed_chosen.index),
+                     ([], unsealed_chosen.index)]
+            size = len(EventCallObject.cases_to_bytecode(cases))
+            candidate_event_calls = [e for e in unused_event_calls
+                                     if e.size >= size]
+            event_call = candidate_event_calls.pop(0)
+            event_call.overwrite_event_call(cases)
+            unused_event_calls.remove(event_call)
+            for a in a2:
+                t = TriggerObject.create_trigger(
+                    mapid=a.mapid, x=a.x, y=a.y,
+                    misc1=0xFF, misc2=event_call.index, misc3=0)
 
     reseed()
     npcs = [n for cg in cluster_groups for m in cg.maps
@@ -4164,8 +4231,8 @@ if __name__ == "__main__":
         else:
             f = open(get_outfile(), "r+b")
             f.seek(addresses.scenario0016)
-            bytestr = NameObject.generate_name_bytes(
-                    ["$D7", "$C2", "$3A", "$A2", "$92", "$7C", "$8F", "$8B"])
+            bytestr = "".join(map(chr,
+                [0xD7, 0xC2, 0x3A, 0xA2, 0x92, 0x7C, 0x8F, 0x8B]))
             while len(bytestr) < 8:
                 bytestr += chr(0xFF)
             f.write(bytestr)
@@ -4185,6 +4252,10 @@ if __name__ == "__main__":
         if DEBUG_MODE:
             for m in MonsterObject.every:
                 MonsterXPObject.get(m.index).xp = 60000
+                m.hp = 0
+                m.attack_sequence_group = 0
+            for m in MapObject.every:
+                EncounterRateObject.get(m.index).encounter_rate = 0
             for p in PriceObject.every:
                 p.set_price(10)
             for c in CharacterObject.every:
