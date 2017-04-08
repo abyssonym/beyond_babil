@@ -11,7 +11,7 @@ from os import path
 from time import time
 from collections import Counter
 import string
-import numpy
+#import numpy
 
 
 VERSION = 3
@@ -2541,6 +2541,12 @@ class LevelUp:
                    | ord(data[3]))
         assert self.to_data() == data
 
+    def __repr__(self):
+        s = ""
+        for c in self.to_data():
+            s += "{0:0>2} ".format("%x" % ord(c))
+        return s.strip()
+
     def to_data(self):
         data = ""
         amount = self.amount if self.amount >= 0 else 7
@@ -2678,10 +2684,35 @@ class LevelUpObject(TableObject):
         self.levels = levels
         assert len(self.levels) == 69
 
+    def load_lower_levels(self):
+        f = open(path.join(tblpath, "levels.txt"))
+        levels = []
+        for line in f:
+            line = line.strip()
+            if not line or line[0] == '#':
+                continue
+            while '  ' in line:
+                line = line.replace('  ', ' ')
+            superindex, levelindex, data = line.split(' ', 2)
+            superindex = int(superindex, 0x10)
+            if superindex != self.index:
+                continue
+            levelindex = int(levelindex)
+            data = "".join(map(lambda s: chr(int(s, 0x10)), data.split()))
+            levels.append(LevelUp(data))
+        assert len(levels) == len(self.levels)
+        for i, (before, after) in enumerate(zip(self.levels, levels)):
+            if i < self.character.level-1:
+                continue
+            assert before.to_data() == after.to_data()
+        self.levels = levels
+        f.close()
+
     def delevel_character(self):
         if not self.valid:
             return
-        self.extrapolate_lower_levels()
+        #self.extrapolate_lower_levels()
+        self.load_lower_levels()
         while self.character.level > 1:
             level = self.levels[self.character.level-2]
             self.character.max_hp -= level.hp
