@@ -70,5 +70,5 @@ $dup_learn_call         1f178
 $warp_fix_start         1ad1
 $warp_fix_limit         1b14
 $damage_floor_amount    1608
-.patch                  fast_menu_dash_na.txt
+.option                 fast_menu_dash_na.txt
 .patch                  consumable_saves_na.txt
