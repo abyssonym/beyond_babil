@@ -255,8 +255,12 @@ class ClusterExit(ReprSortMixin):
         return self.cluster.mapid
 
     @property
+    def canonical_map(self):
+        return MapObject.reverse_grid_index_canonical(self.mapid)
+
+    @property
     def canonical_mapid(self):
-        return MapObject.reverse_grid_index_canonical(self.mapid).index
+        return self.canonical_map.index
 
     @property
     def cluster_group(self):
@@ -316,11 +320,15 @@ class Cluster(ReprSortMixin):
 
     @property
     def damage_floors(self):
-        return MapObject.reverse_grid_index_canonical(self.mapid).damage_floors
+        return self.canonical_map.damage_floors
 
     @property
     def canonical_mapid(self):
-        return MapObject.reverse_grid_index_canonical(self.mapid).index
+        return self.canonical_map.index
+
+    @property
+    def canonical_map(self):
+        return MapObject.reverse_grid_index_canonical(self.mapid)
 
     @staticmethod
     def from_string(s):
@@ -377,7 +385,7 @@ class ClusterGroup:
     @property
     def encounter_mapids(self):
         return set([c.mapid for c in self.clusters
-                    if MapObject.get(c.canonical_mapid).encounters])
+                    if c.canonical_map.encounters])
 
     @property
     def canonical_mapids(self):
@@ -387,7 +395,7 @@ class ClusterGroup:
     def maps(self):
         maps = []
         for c in sorted(self.clusters, key=lambda c2: (c2.rank, c2)):
-            m = MapObject.get(c.canonical_mapid)
+            m = c.canonical_map
             if m not in maps:
                 maps.append(m)
         return maps
@@ -996,7 +1004,8 @@ def assign_treasure(cluster_groups):
     candidates = [p for p in PriceObject.every if not p.banned]
     candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
     nonweirds = [c for c in candidates if c.is_medicine or c.is_equipment
-                 or c.is_battle_item or (c.is_consumable and c.buyable)]
+                 or c.is_battle_item or (c.is_consumable and c.buyable)
+                 or c.index == 0xFD]
     nonweirds = [c for c in nonweirds if not c.is_initial_equipment]
     consumables = [c for c in nonweirds if c.is_consumable]
     for d in MonsterDropObject.every:
@@ -1839,6 +1848,10 @@ def generate_cave_layout(segment_lengths=None):
             continue
         break
 
+    for cg in cluster_groups:
+        for m in cg.maps:
+            m.convert_save_points()
+
     return cluster_groups, lungs
 
 
@@ -2338,8 +2351,9 @@ class PriceObject(TableObject):
 
     @property
     def banned(self):
-        return self.index in ([0, 0x46, 0x60, 0x9a] + range(0xFC, 0x100) +
-            [0xEE, 0xEF, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF7, 0xF8, 0xFA])
+        return self.index in (
+            [0x00, 0x46, 0x60, 0x9a, 0xC8, 0xEE, 0xEF, 0xF0, 0xF1, 0xF2,
+             0xF3, 0xF4, 0xF5, 0xF7, 0xF8, 0xFA, 0xFC, 0xFE, 0xFF])
 
     @property
     def buyable(self):
@@ -2366,6 +2380,8 @@ class PriceObject(TableObject):
     def rank(self):
         if self.banned:
             return -1
+        if self.index == 0xFD:
+            return 200000
         if self.rare_tool:
             return 1000000
         if self.buyable:
@@ -3366,6 +3382,31 @@ class MapObject(TableObject):
                 if tile.get_bit("save_point"):
                     return True
         return False
+
+    def convert_save_points(self):
+        for y in xrange(32):
+            for x in xrange(32):
+                tile = self.map[y][x]
+                tile = TileObject.get((128*self.tileset_index)+tile)
+                if tile.get_bit("save_point"):
+                    mymap = self.map
+                    if self.tileset_index in [0, 3, 4, 8, 15]:
+                        options = []
+                        if x > 0:
+                            options.append(mymap[y][x-1])
+                        if x < 31:
+                            options.append(mymap[y][x+1])
+                        chosen = random.choice(options)
+                        mymap[y][x] = chosen
+                    else:
+                        mymap[y][x] = 0x78
+                        self.create_chest(0xFD, x, y)
+                    self.mapgrid.overwrite_map_data(mymap)
+
+    def create_chest(self, contents, x, y):
+        TriggerObject.create_trigger(
+            mapid=self.index, x=x, y=y,
+            misc1=0xFE, misc2=0x80, misc3=contents)
 
     @property
     def damage_floors(self):
