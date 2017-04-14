@@ -2738,6 +2738,9 @@ class LevelUpObject(TableObject):
         if not self.valid:
             return
 
+        mco = MenuCommandObject.get(self.character.index)
+        spellsets = [getattr(mco, attr) for attr in ["white", "black", "call"]
+                     if getattr(mco, attr) != 0xFF]
         while self.character.level < target_level:
             level = self.levels[self.character.level-1]
             self.character.max_hp += level.hp
@@ -2751,6 +2754,10 @@ class LevelUpObject(TableObject):
                     assert value > 0
                     setattr(self.character, attr, value)
             self.character.level += 1
+            for s in spellsets:
+                for l in LearnedSpellObject.getgroup(s):
+                    if l.level == self.character.level:
+                        InitialSpellObject.add_spell(l.spell, s)
         assert self.character.level >= target_level
 
     def write_data(self, filename=None, pointer=None):
