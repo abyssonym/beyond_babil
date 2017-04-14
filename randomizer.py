@@ -851,7 +851,10 @@ def assign_formations(cluster_groups):
         max_pack = len(packs)-1
         max_map = float(len(mapids)-1)
         for i, m in enumerate(mapids):
-            index = int(round((i / max_map) * max_pack))
+            if max_map == 0:
+                index = 0
+            else:
+                index = int(round((i / max_map) * max_pack))
             pack = packs[index]
             assert m < 0x100
             e = EncounterObject.get(m)
@@ -4239,7 +4242,7 @@ if __name__ == "__main__":
             NUM_CHECKPOINTS = int(y)
         except ValueError:
             pass
-        NUM_CHECKPOINTS = max(min(NUM_CHECKPOINTS, NUM_FLOORS/3), 0)
+        NUM_CHECKPOINTS = max(min(NUM_CHECKPOINTS, (NUM_FLOORS-3)/3), 0)
         segment_lengths = [NUM_FLOORS / (NUM_CHECKPOINTS+1)] * (NUM_CHECKPOINTS+1)
         for i in range(len(segment_lengths)):
             if sum(segment_lengths) == NUM_FLOORS:
