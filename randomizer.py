@@ -769,13 +769,15 @@ def assign_formations(cluster_groups):
             boss_candidates = set([b for b in bosses if lower < b.rank])
             next_candidates = set([b for b in bosses if upper < b.rank])
             boss_candidates -= next_candidates
-            if not boss_candidates:
+            if len(boss_candidates) <= 1:
                 continue
             boss_candidates = sorted(boss_candidates,
                                      key=lambda b: (b.rank, b.index))
             temp = [b for b in boss_candidates if b.rank > prev_boss_rank]
-            if temp:
+            if len(temp) >= 2:
                 boss_candidates = temp
+            elif len(temp) == 1:
+                continue
             max_index = len(boss_candidates)-1
             index = random.randint(0, random.randint(0, max_index))
             chosen = boss_candidates[index]
