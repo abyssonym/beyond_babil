@@ -3233,8 +3233,18 @@ class TriggerObject(TableObject):
 
     @staticmethod
     def create_trigger(mapid, x, y, misc1, misc2, misc3):
-        existing = len(TriggerObject.getgroup(mapid))
-        index = (1 << 16) | (mapid << 8) | existing
+        tgroup = TriggerObject.getgroup(mapid)
+        for ex in list(tgroup):
+            if ex.x == x and ex.y == y:
+                ex.groupindex = -1
+                tgroup = TriggerObject.getgroup(mapid)
+        if tgroup:
+            existing = [t.index & 0xFF for t in tgroup]
+            choices = [i for i in range(0x100) if i not in existing]
+            chosen = choices.pop(0)
+        else:
+            chosen = 0
+        index = (1 << 16) | (mapid << 8) | chosen
         t = TriggerObject(index=index)
         t.groupindex = mapid
         t.x = x
