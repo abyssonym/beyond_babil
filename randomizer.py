@@ -865,7 +865,9 @@ def assign_formations(cluster_groups):
             for f in p:
                 if f.get_bit("no_flee"):
                     f.set_bit("no_flee", False)
-                else:
+                    if f.battle_music == 3:
+                        f.set_appropriate_boss_music()
+                elif f.battle_music == 0:
                     f.set_music(3)
         if cgi >= len(cluster_groups)-1:
             assert cg.boss == zeromus
@@ -880,10 +882,7 @@ def assign_formations(cluster_groups):
             write_multi(f, cg.boss.index, length=2)
             f.close()
         elif cg.boss.battle_music == 3:
-            if cgi > len(cluster_groups) / 2:
-                cg.boss.set_music(2)
-            else:
-                cg.boss.set_music(1)
+            cg.boss.set_appropriate_boss_music()
 
     zeromus.monster_types = [255, 201, 255]
     zeromus.monster_qty = 0b00010000
@@ -2075,6 +2074,14 @@ class FormationObject(TableObject):
         self.misc2 = self.misc2 & 0b11110011
         self.misc2 |= (value << 2)
         assert self.battle_music == value
+
+    def set_appropriate_boss_music(self):
+        if self.index in [
+                0xe3, 0xe5, 0xea, 0xff, 0xdc,
+                0x1fb, 0x1fd, 0x1fe, 0x1fa, 0x1fc]:
+            self.set_music(2)
+        else:
+            self.set_music(1)
 
     @property
     def scenario(self):
