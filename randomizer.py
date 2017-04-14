@@ -4205,12 +4205,7 @@ def suggest_party(chosen):
     leader = names[chosen]
     party = [leader]
     while len(party) < 5:
-        if "Palom" in party and "Porom" not in party:
-            party.append("Porom")
-        elif "Porom" in party and "Palom" not in party:
-            party.append("Palom")
-        else:
-            party.append(random.choice(sorted(names.values())))
+        party.append(random.choice(sorted(names.values())))
     count = Counter(party)
     party = sorted(set(party), key=lambda p: reverse_names[p])
     party.remove(leader)
