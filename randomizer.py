@@ -4263,7 +4263,7 @@ if __name__ == "__main__":
             NUM_FLOORS = int(x)
         except ValueError:
             NUM_FLOORS = 100
-        NUM_FLOORS = max(min(NUM_FLOORS, 160), 3)
+        NUM_FLOORS = max(min(NUM_FLOORS, 150), 3)
 
         NUM_CHECKPOINTS = int(round(NUM_FLOORS**0.5))-1
         y = raw_input("How many checkpoints? (default: %s) " % NUM_CHECKPOINTS)
