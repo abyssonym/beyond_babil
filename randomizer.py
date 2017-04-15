@@ -3837,6 +3837,7 @@ def setup_opening_event(mapid=0, x=16, y=30):
     chosen = random.choice(range(0, 9) + [10, 13, 17])
     new_event = [
         0xE0, 0xFD,                 # consumable save
+        0xE0, 0xE2,                 # tent
         0xFA, 0x0E,                 # play lunar whale theme
         0xE8, 0x01,                 # remove DK cecil
         0xE7, chosen+1,             # random starting character

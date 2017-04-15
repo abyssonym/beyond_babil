@@ -5,4 +5,11 @@
 
 00a1a5: fd 90
 
-00a330: 22 80 ff 01 ea
+00a330: 22 80 ff 01  ea
+
+001beb: 22 c0 ff 01  ea ea ea
+00ffc0: ad 02 1a 29  01 c9 00 d0  07 a5 a1 29  08 8d 02 1a
+00ffd0: 6b
+
+002886: 22 b0 ff 01  ea
+00ffb0: ad 02 1a 29  fe 8d 02 1a  a5 ac aa a5  ab 6b
