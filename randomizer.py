@@ -4040,10 +4040,12 @@ def undummy():
             s = LongSpellNameObject.get(index-len(SpellNameObject.every))
         s.rename(name)
 
-    rosa_learn = [(5, 12), (6, 27), (0xc, 31)]
+    rosa_learn = [(5, 12), (6, 29), (0xc, 31)]
     rosa_spellset = 7
+    porom_spellset = 9
     for spell, level in rosa_learn:
         LearnedSpellObject.add_spell(spell, level, rosa_spellset)
+        LearnedSpellObject.add_spell(spell, level, porom_spellset)
 
 
 def lunar_ai_fix(filename=None):
