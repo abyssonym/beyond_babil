@@ -2560,6 +2560,7 @@ class LevelUp:
         return s.strip()
 
     def to_data(self):
+        self.xp = max(self.xp, 1)
         data = ""
         amount = self.amount if self.amount >= 0 else 7
         for i, attr in enumerate(["wil", "wis", "vit", "agi", "str"]):
