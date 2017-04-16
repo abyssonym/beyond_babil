@@ -944,12 +944,20 @@ def assign_treasure(cluster_groups):
             candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
         rank = i / max_chest
         max_item = len(candidates)-1
-        a = random.randint(0, random.randint(0, max_item))
-        b = random.randint(0, max_item)
-        a, b = min(a, b), max(a, b)
-        index = (a * (1-rank)) + (b * rank)
-        index = int(round(index))
-        item = share_mythic(candidates[index], candidates)
+        while True:
+            a = random.randint(0, random.randint(0, max_item))
+            b = random.randint(0, max_item)
+            a, b = min(a, b), max(a, b)
+            index = (a * (1-rank)) + (b * rank)
+            index = int(round(index))
+            item = share_mythic(candidates[index], candidates)
+            if item.buyable:
+                buyables = [c for c in candidates if c.buyable]
+                max_index = len(buyables) / 2
+                index = random.randint(0, random.randint(0, max_index))
+                if buyables.index(item) < index:
+                    continue
+            break
         c.misc3 = item.index
         c.misc2 = 0x80
         if not (item.is_medicine or item.is_arrows):
