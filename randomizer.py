@@ -389,7 +389,7 @@ class ClusterGroup:
 
     @property
     def encounter_mapids(self):
-        return set([c.mapid for c in self.clusters
+        return set([c.canonical_mapid for c in self.clusters
                     if c.canonical_map.encounters])
 
     @property
@@ -409,8 +409,8 @@ class ClusterGroup:
     def ranked_mapids(self):
         mapids = []
         for c in sorted(self.clusters, key=lambda c: c.rank):
-            if c.mapid not in mapids:
-                mapids.append(c.mapid)
+            if c.canonical_mapid not in mapids:
+                mapids.append(c.canonical_mapid)
         return mapids
 
     @property
@@ -1709,7 +1709,7 @@ def generate_cave_layout(segment_lengths=None):
     done_battle_bgs = set([
         (MapObject.get(mapid).battle_bg,
          MapObject.get(mapid).get_bit("alternate_palette"))
-        for cg in cluster_groups for mapid in cg.mapids])
+        for cg in cluster_groups for mapid in cg.canonical_mapids])
     lung_battle_bgs = [l for l in lung_battle_bgs if l not in done_battle_bgs]
     assert len(cluster_groups)-1 < len(all_battle_bgs)
     while len(lung_battle_bgs) < len(cluster_groups)-1:
