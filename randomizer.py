@@ -1197,6 +1197,9 @@ def generate_cave_layout(segment_lengths=None):
     zemus.overwrite_map_data(zemus_map)
     special_maps = [LUNAR_WHALE_INDEX, ZEMUS_INDEX]
     print "Selecting maps..."
+    # make lunar whale always same map for swappable save files
+    replace_dict[LUNAR_WHALE_INDEX] = 0xbd
+    to_replace.append(0xbd)
     while len(chosen) < sum(segment_lengths):
         for m in special_maps:
             if m not in replace_dict:
