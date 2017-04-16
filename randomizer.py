@@ -1305,7 +1305,18 @@ def generate_cave_layout(segment_lengths=None):
         return generate_cave_layout(segment_lengths)
 
     reseed()
+    def special_score(cgs):
+        return len([(a, b) for (a, b) in zip(cgs, cgs[1:])
+                    if a.special_exits and b.special_exits])
+
     random.shuffle(cluster_groups)
+    for _ in xrange(100):
+        old_groups = list(cluster_groups)
+        if special_score(old_groups) == 0:
+            break
+        random.shuffle(cluster_groups)
+        if special_score(old_groups) <= special_score(cluster_groups):
+            cluster_groups = old_groups
 
     for after, before in replace_dict.items():
         assert before in to_replace
@@ -1705,7 +1716,20 @@ def generate_cave_layout(segment_lengths=None):
     if len(special_exits) == 1:
         last_exit = special_exits.pop()
     elif len(special_exits) % 2:
-        last_exit = random.choice(special_exits[1:-1])
+        pair_cands = [
+            (a, b) for (a, b) in zip(cluster_groups, cluster_groups[1:])
+            if a.special_exits and b.special_exits]
+        if pair_cands:
+            pair = list(random.choice(pair_cands))
+            first, last = cluster_groups[0], cluster_groups[-1]
+            if first in pair:
+                pair.remove(first)
+            if last in pair:
+                pair.remove(last)
+            chosen = random.choice(pair)
+            last_exit = chosen.special_exits
+        else:
+            last_exit = random.choice(special_exits[1:-1])
         special_exits.remove(last_exit)
     else:
         last_exit = None
