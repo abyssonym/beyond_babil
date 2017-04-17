@@ -1085,7 +1085,7 @@ def assign_treasure(cluster_groups):
         if option in ["is_medicine", "is_battle_consumable"]:
             candidates = sorted(candidates, key=lambda c: (c.rank, c.index))
             items = []
-            while len(items) < 8:
+            while len(items) < 7:
                 max_index = len(candidates)-1
                 index = random.randint(0, random.randint(0, max_index))
                 chosen = candidates[index]
@@ -1093,6 +1093,11 @@ def assign_treasure(cluster_groups):
                     items.append(chosen)
 
             s.items = sorted([i.index for i in items])
+            candidates = [p for p in PriceObject.every if p.is_consumable
+                          and p.price > 10 and p.sellable and not p.buyable
+                          and not (p.banned or p.rare_tool)]
+            chosen = random.choice(candidates)
+            s.items.insert(0, chosen.index)
             continue
 
         candidates = [c for c in candidates
@@ -1102,17 +1107,17 @@ def assign_treasure(cluster_groups):
             e = EquipmentObject.get(c.index)
             equip_indexes.add((e.equip_index, c.is_arrows))
         temp = sorted(equip_indexes - done_equips[option])
-        if len(temp) < 8:
+        if len(temp) < 7:
             done_equips[option] = set([])
             chosen = temp
             sorted_indexes = sorted(equip_indexes)
-            while len(chosen) < 8:
+            while len(chosen) < 7:
                 c = random.choice(sorted_indexes)
                 if c not in chosen:
                     chosen.append(c)
                     done_equips[option].add(c)
         else:
-            chosen = random.sample(temp, 8)
+            chosen = random.sample(temp, 7)
             done_equips[option] |= set(chosen)
         items = []
         for c in chosen:
@@ -1123,7 +1128,13 @@ def assign_treasure(cluster_groups):
             index = random.randint(0, random.randint(0, max_index))
             item = itemcands[index]
             items.append(item)
+
         s.items = sorted([i.index for i in items])
+        candidates = [p for p in PriceObject.every if getattr(p, option)
+                      and p.price > 10 and p.sellable and not p.buyable
+                      and not (p.banned or p.rare_tool)]
+        chosen = random.choice(candidates)
+        s.items.insert(0, chosen.index)
 
 
 def generate_cave_layout(segment_lengths=None):
