@@ -1066,7 +1066,12 @@ def assign_treasure(cluster_groups):
         if not m.get_bit("boss") or m.common:
             drop_rate = 1 + random.randint(0, random.randint(0, 1))
         else:
-            drop_rate = 1 + random.randint(0, 1) + random.randint(0, 1)
+            for cg in cluster_groups:
+                if m in cg.boss.monsters:
+                    drop_rate = 1 + random.randint(0, 1) + random.randint(0, 1)
+                    break
+            else:
+                drop_rate = 3
         m.set_drop_rate(drop_rate)
     for m in MonsterObject.every:
         if m.rank <= 0:
