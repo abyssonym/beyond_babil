@@ -1327,7 +1327,7 @@ def generate_cave_layout(segment_lengths=None):
                 cluster_groups = []
                 break
 
-    if [len(cg.mapids) for cg in cluster_groups] != segment_lengths:
+    if set([len(cg.mapids) for cg in cluster_groups]) != set(segment_lengths):
         print "Retrying cave generation..."
         return generate_cave_layout(segment_lengths)
 
