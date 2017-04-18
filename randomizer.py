@@ -925,6 +925,9 @@ def assign_treasure(cluster_groups):
             random.shuffle(chests)
             all_chests.extend(chests)
 
+    for c in all_chests:
+        c.misc2 = 0x80
+
     def share_mythic(item, candidates=None):
         if item.rank < 500000:
             return item
@@ -976,6 +979,8 @@ def assign_treasure(cluster_groups):
     unused_formations = [f for f in FormationObject.every if f.index >= 0x1c0]
     for f in unused_formations:
         AIFixObject.set_formation_ai(f.index, False)
+    for c in all_chests:
+        assert not c.misc2 & 0x40
     for cg in cluster_groups:
         candidates = sorted([c for m in cg.maps for c in m.chests],
                             key=lambda c2: (c2.chest_rank, c2.index))
