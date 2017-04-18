@@ -955,7 +955,7 @@ def assign_treasure(cluster_groups):
             index = int(round(index))
             item = share_mythic(candidates[index], candidates)
             if item.buyable:
-                buyables = [c for c in candidates if c.buyable]
+                buyables = [cand for cand in candidates if cand.buyable]
                 max_index = len(buyables) / 2
                 index = random.randint(0, random.randint(0, max_index))
                 if buyables.index(item) < index:
