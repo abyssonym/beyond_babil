@@ -1240,24 +1240,29 @@ def generate_cave_layout(segment_lengths=None):
         if choose >= 0x100:
             size = MapGrid2Object.get(choose & 0xFF).adjusted_size
             candidates = [m for m in MapGridObject.every
-                          if m.index in mapids and m.adjusted_size >= size]
+                          if m.index in mapids and m.adjusted_size >= size
+                          and m.index > 0
+                          and MapObject.reverse_grid_index(m.index)]
             priority = [m for m in MapGridObject.every
                         if m.index not in mapids + chosen + to_replace
-                        and m.adjusted_size >= size and m.index not in banned_grids]
+                        and m.adjusted_size >= size
+                        and m.index not in banned_grids and m.index > 0
+                        and MapObject.reverse_grid_index(m.index)]
             sort_func = lambda m: (m.adjusted_size, m.index)
-            candidates = (sorted(priority, key=sort_func) +
-                          sorted(candidates, key=sort_func))
+            if priority:
+                candidates = priority
+            candidates = sorted(candidates, key=sort_func)
             # the zeroth map should have trigger data that starts with a low
             # byte value or else it will be mistaken by ff4kster for another
             # pointer in the table
-            candidates = [c for c in candidates
-                          if MapObject.reverse_grid_index(c.index)
-                          and c.index > 0]
             if not candidates:
                 continue
             max_index = len(candidates)-1
-            candchoose = random.randint(0, random.randint(0, max_index))
-            candchoose = candidates[candchoose]
+            if priority:
+                candchoose = candidates.pop(0)
+            else:
+                candchoose = random.randint(0, random.randint(0, max_index))
+                candchoose = candidates[candchoose]
             to_replace.append(candchoose.index)
             if candchoose not in priority:
                 mapids.remove(candchoose.index)
