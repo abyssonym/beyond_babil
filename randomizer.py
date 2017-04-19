@@ -966,9 +966,12 @@ def assign_treasure(cluster_groups):
         if not (item.is_medicine or item.is_arrows):
             candidates.remove(item)
 
-    if not any([c.contents == 0xFB for c in all_chests]):
-        dupcounts = Counter([c.contents for c in all_chests])
-        temp = [c for c in all_chests if dupcounts[c.contents] > 1]
+    dkmatter_cands = [c for c in all_chests if c.groupindex < 150]
+    if not any([c.contents == 0xFB for c in dkmatter_cands]):
+        dupcounts = Counter([c.contents for c in dkmatter_cands])
+        temp = [c for c in dkmatter_cands if dupcounts[c.contents] > 1]
+        if not temp:
+            temp = dkmatter_cands
         if not temp:
             temp = all_chests
         max_index = len(temp)-1
