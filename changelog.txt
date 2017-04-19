@@ -1,3 +1,19 @@
+Version 5:
+- After using a save crystal, the player may now tent or cabin without losing
+the ability to save. Saves are deactivated as soon as the player moves.
+- Various exits were added to the dungeon, including the mysidia crystal room,
+mt. ordeals crystal room, serpent road, etc.
+- Many useless maps were removed from the dungeon.
+- Dungeon generation was optimized so that a custom number of
+floors/checkpoints doesn't require a huge number of retries.
+- Some items that are not normally buyable were added back to shops.
+- Random bosses have a 100% drop rate.
+- Various bugfixes affecting treasure and enemy assignments.
+- Rydia and Paladin Cecil properly start with their low-level spells learned.
+- Porom now learns the dummied white magic.
+- The starting Lunar Whale map is now fixed in the data, so that saves can be
+transferred between seeds if desired.
+
 Version 4:
 - Most save points have been eliminated and replaced with consumable save crystals, each will enable the save feature of the menu until the player exits the menu or resets the game. These crystals can be used anywhere but are very rare. You start with one in your inventory for free.
 - Fast menus and Y-dashing are now optional features in the US version.
